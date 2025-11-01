@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CopilotDiffPersistence">
+    <option name="pendingDiffs">
+      <map>
+        <entry key="$PROJECT_DIR$/src/main/java/com/example/portfoliotracker/jobs/AmfiNavScheduler.java">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/src/main/java/com/example/portfoliotracker/jobs/AmfiNavScheduler.java" />
+              <option name="originalContent" value="package com.example.portfoliotracker.jobs;&#10;&#10;import com.example.portfoliotracker.service.AmfiIngestService;&#10;import org.springframework.scheduling.annotation.Scheduled;&#10;import org.springframework.stereotype.Component;&#10;&#10;@Component&#10;public class AmfiNavScheduler {&#10;    private final AmfiIngestService ingestService;&#10;&#10;    public AmfiNavScheduler(AmfiIngestService ingestService) {&#10;        this.ingestService = ingestService;&#10;    }&#10;&#10;    @Scheduled(cron = &quot;${amfi.nav.cron}&quot;)&#10;    public void runDailyIngest() {&#10;        ingestService.fetchAndIngest();&#10;    }&#10;}&#10;" />
+              <option name="updatedContent" value="package com.example.portfoliotracker.jobs;&#10;&#10;import com.example.portfoliotracker.service.AmfiIngestService;&#10;import org.springframework.scheduling.annotation.Scheduled;&#10;import org.springframework.stereotype.Component;&#10;&#10;@Component&#10;public class AmfiNavScheduler {&#10;    private final AmfiIngestService ingestService;&#10;&#10;    public AmfiNavScheduler(AmfiIngestService ingestService) {&#10;        this.ingestService = ingestService;&#10;    }&#10;&#10;    @Scheduled(cron = &quot;${amfi.nav.cron}&quot;)&#10;    public void runDailyIngest() {&#10;        ingestService.fetchAndIngest();&#10;    }&#10;}" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+</project>
