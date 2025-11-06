@@ -107,6 +107,7 @@ public class AmfiIngestService {
                         amfiNav.setSchemeCode(schemeCode);
                         amfiNav.setNavValue(nav);
                         amfiNav.setNavDate(navDate);
+                        amfiNav.setCreatedAt(LocalDateTime.now());
                         navRepository.save(amfiNav);
                     }
                 } catch (Exception ex) {
