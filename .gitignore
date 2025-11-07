@@ -24,7 +24,66 @@ replay_pid*
 
 # Database credentials and other environement variables
 .env
+
+# Ignore application specific folders
 /logs/
 /build/
 /.idea/
 /.gradle/
+/.settings/
+/.classpath
+/.project
+/.factorypath
+
+# Ignore build directories
+/build/
+/dist/
+/target/
+/out/
+/bin/
+/obj/
+
+# Ignore OS generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Ignore IDE specific files
+.vscode/
+*.iml
+*.ipr
+*.iws
+*.suo
+*.user
+*.userosscache
+*.sln
+*.sw?
+*.bak
+*.orig
+*.tmp
+*.log
+*.class
+*.jar
+*.war
+*.ear
+*.db
+*.sql
+*.sqlite
+*.sqlite3
+*.logs
+*.out
+*.log
+*.log.*
+*.log-*
+*.log.*.gz
+*.log.zip
+*.log.tar.gz
+*.log.bz2
+*.log.xz
+*.log.lzma
+*.log.zst
+*.log.lz
+*.log.lzo
+*.log.sz
