@@ -2,24 +2,37 @@ package com.example.portfoliotracker.controller;
 
 import com.example.portfoliotracker.entity.AmfiNav;
 import com.example.portfoliotracker.entity.AmfiScheme;
+import com.example.portfoliotracker.entity.FundHouse;
+import com.example.portfoliotracker.repository.AmfiSchemeRepository;
+import com.example.portfoliotracker.repository.FundHouseRepository;
 import com.example.portfoliotracker.service.AmfiIngestService;
 import com.example.portfoliotracker.service.AmfiService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.Serializable;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/amfi")
 public class AmfiController {
     private final AmfiService amfiService;
     private final AmfiIngestService ingestService;
+    private final FundHouseRepository fundHouseRepository;
+    private final AmfiSchemeRepository schemeRepository;
 
-    public AmfiController(AmfiIngestService ingestService, AmfiService amfiService) {
-        this.ingestService = ingestService;
+    public AmfiController(AmfiService amfiService,
+                          AmfiIngestService ingestService,
+                          FundHouseRepository fundHouseRepository,
+                          AmfiSchemeRepository schemeRepository) {
         this.amfiService = amfiService;
+        this.ingestService = ingestService;
+        this.fundHouseRepository = fundHouseRepository;
+        this.schemeRepository = schemeRepository;
     }
 
     /**
@@ -74,9 +87,18 @@ public class AmfiController {
         }
     }
 
-    @GetMapping("/ingest")
-    public ResponseEntity<Void> ingest() {
-        ingestService.fetchAndIngest();
-        return ResponseEntity.noContent().build();
+    /**
+     * List fund houses with scheme counts
+     */
+    @GetMapping("/fundhouses")
+    public ResponseEntity<List<Map<String, ? extends Serializable>>> listFundHouses() {
+        List<FundHouse> houses = amfiService.listFundHousesWithCounts();
+        List<Map<String, ? extends Serializable>> payload = houses.stream().map(h -> Map.of(
+                "id", h.getId(),
+                "name", h.getName(),
+                "schemeCount", schemeRepository.countByFundHouseEntity(h),
+                "lastNavDate", h.getLastNavDate()
+        )).collect(Collectors.toList());
+        return ResponseEntity.ok(payload);
     }
 }

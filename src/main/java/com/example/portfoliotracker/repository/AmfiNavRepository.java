@@ -10,4 +10,5 @@ import java.util.Optional;
 @Repository
 public interface AmfiNavRepository extends JpaRepository<AmfiNav, Long> {
     Optional<AmfiNav> findBySchemeCodeAndNavDate(String schemeCode, LocalDate navDate);
+
 }

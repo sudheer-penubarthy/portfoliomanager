@@ -4,6 +4,7 @@ import com.example.portfoliotracker.entity.AmfiNav;
 import com.example.portfoliotracker.entity.AmfiScheme;
 import com.example.portfoliotracker.repository.AmfiNavRepository;
 import com.example.portfoliotracker.repository.AmfiSchemeRepository;
+import com.example.portfoliotracker.repository.FundHouseRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -25,6 +26,7 @@ class AmfiIngestServiceTest {
     private AmfiSchemeRepository schemeRepository;
     private AmfiNavRepository navRepository;
     private AmfiIngestService ingestService;
+    private FundHouseRepository fundHouseRepository;
 
     @Captor
     ArgumentCaptor<AmfiNav> navCaptor = ArgumentCaptor.forClass(AmfiNav.class);
@@ -34,7 +36,8 @@ class AmfiIngestServiceTest {
         restTemplate = mock(RestTemplate.class);
         schemeRepository = mock(AmfiSchemeRepository.class);
         navRepository = mock(AmfiNavRepository.class);
-        ingestService = new AmfiIngestService(restTemplate, schemeRepository, navRepository, "http://dummy");
+        fundHouseRepository = mock(FundHouseRepository.class);
+        ingestService = new AmfiIngestService(restTemplate, schemeRepository, navRepository, "http://dummy", fundHouseRepository);
     }
 
     @Test

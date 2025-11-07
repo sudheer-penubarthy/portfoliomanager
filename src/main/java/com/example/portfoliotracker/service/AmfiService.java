@@ -2,25 +2,31 @@ package com.example.portfoliotracker.service;
 
 import com.example.portfoliotracker.entity.AmfiNav;
 import com.example.portfoliotracker.entity.AmfiScheme;
+import com.example.portfoliotracker.entity.FundHouse;
 import com.example.portfoliotracker.repository.AmfiNavRepository;
 import com.example.portfoliotracker.repository.AmfiSchemeRepository;
+import com.example.portfoliotracker.repository.FundHouseRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
+@Slf4j
 @Service
 public class AmfiService {
     private final AmfiSchemeRepository schemeRepository;
     private final AmfiNavRepository navRepository;
     private final AmfiIngestService ingestService;
+    private final FundHouseRepository fundHouseRepository;
 
 
-    public AmfiService(AmfiSchemeRepository schemeRepository, AmfiNavRepository navRepository, AmfiIngestService ingestService) {
+    public AmfiService(AmfiSchemeRepository schemeRepository, AmfiNavRepository navRepository, AmfiIngestService ingestService, FundHouseRepository fundHouseRepository) {
         this.schemeRepository = schemeRepository;
         this.navRepository = navRepository;
         this.ingestService = ingestService;
+        this.fundHouseRepository = fundHouseRepository;
     }
 
     public List<AmfiScheme> findByFundHouse(String fundHouse, boolean activeOnly) {
@@ -48,5 +54,11 @@ public class AmfiService {
 
     public void triggerAdhocIngest() {
         ingestService.fetchAndIngest();
+    }
+
+    public List<FundHouse> listFundHousesWithCounts(){
+        List<FundHouse> fundHouses = fundHouseRepository.findAll();
+
+        return fundHouses;
     }
 }

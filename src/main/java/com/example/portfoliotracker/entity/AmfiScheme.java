@@ -1,13 +1,17 @@
 package com.example.portfoliotracker.entity;
 
 import jakarta.persistence.*;
-import lombok.Data;
+import lombok.*;
 
 import java.time.LocalDateTime;
 
-@Data
 @Entity
 @Table(name = "amfi_scheme", uniqueConstraints = {@UniqueConstraint(columnNames = {"scheme_code"})})
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class AmfiScheme {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -25,8 +29,14 @@ public class AmfiScheme {
     @Column(name = "scheme_name", length = 1024, nullable = false)
     private String schemeName;
 
+    // legacy free-text fund house name (kept for backwards compat)
     @Column(name = "fund_house", length = 255)
     private String fundHouse;
+
+    // normalized relation to fund house
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "fund_house_id")
+    private FundHouse fundHouseEntity;
 
     @Column(name = "instrument_type", length = 255)
     private String instrumentType;
@@ -46,4 +56,8 @@ public class AmfiScheme {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+
+    public FundHouse getFundHouseEntity() {
+        return fundHouseEntity;
+    }
 }

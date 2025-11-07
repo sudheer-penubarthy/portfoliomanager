@@ -1,14 +1,18 @@
 package com.example.portfoliotracker.entity;
 
 import jakarta.persistence.*;
-import lombok.Data;
+import lombok.*;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-@Data
 @Entity
 @Table(name = "amfi_nav", uniqueConstraints = {@UniqueConstraint(columnNames = {"scheme_code", "nav_date"})})
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class AmfiNav {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
