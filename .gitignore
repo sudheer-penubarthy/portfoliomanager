@@ -27,7 +27,6 @@ replay_pid*
 
 # Ignore application specific folders
 /logs/
-/build/
 /.idea/
 /.gradle/
 /.settings/
@@ -87,3 +86,10 @@ $RECYCLE.BIN/
 *.log.lz
 *.log.lzo
 *.log.sz
+/.gradle/
+/.idea/
+/build/
+/gradle/
+/logs/
+/.env
+/1
