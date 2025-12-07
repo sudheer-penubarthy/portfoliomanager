@@ -3,26 +3,31 @@ package com.example.portfoliotracker.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+
 @Entity
-@Table(name = "amfi_fund_house")
+@Table(name = "portfolio_user")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class FundHouse {
+public class PortfolioUser {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "name", length = 512, nullable = false, unique = true)
-    private String name;
 
-    @Column(name = "last_nav_date")
-    private LocalDate lastNavDate;
+    @Column(unique = true, length = 320)
+    private String email;
+
+
+    private String name;
+    private String pan;
+    private String phone;
+    private String address;
+    private String kycStatus;
 
     @Column(name = "created_at", updatable = false, nullable = false)
     private LocalDateTime createdAt;

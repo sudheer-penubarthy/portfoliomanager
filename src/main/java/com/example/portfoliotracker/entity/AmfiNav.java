@@ -30,6 +30,14 @@ public class AmfiNav {
     @Column(name = "source", length = 255)
     private String source;
 
-    @Column(name = "created_at")
+    @Column(name = "created_at", updatable = false, nullable = false)
     private LocalDateTime createdAt;
+
+    @PrePersist
+    protected void onCreate() {
+        LocalDateTime now = LocalDateTime.now();
+        if (createdAt == null) {
+            createdAt = now;
+        }
+    }
 }

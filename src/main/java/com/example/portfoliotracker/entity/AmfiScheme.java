@@ -41,6 +41,8 @@ public class AmfiScheme {
     @Column(name = "instrument_type", length = 255)
     private String instrumentType;
 
+
+    @Builder.Default
     @Column(name = "active")
     private Boolean active = true;
 
@@ -50,11 +52,25 @@ public class AmfiScheme {
     @Column(name = "metadata", columnDefinition = "json")
     private String metadata;
 
-    @Column(name = "created_at")
+    @Column(name = "created_at", updatable = false, nullable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "updated_at")
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        LocalDateTime now = LocalDateTime.now();
+        if (createdAt == null) {
+            createdAt = now;
+        }
+        updatedAt = now;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
 
 
     public FundHouse getFundHouseEntity() {
