@@ -26,21 +26,29 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.1.0")
 
-    implementation("org.flywaydb:flyway-core:9.22.0")
+   // implementation("org.flywaydb:flyway-core:9.22.0")
     runtimeOnly("com.mysql:mysql-connector-j:8.3.0")
 
-    runtimeOnly("com.mysql:mysql-connector-j:8.3.0")
+    // Ensure the Flyway Gradle plugin can see the JDBC driver for flywayMigrate
+  //  add("flywayRuntime", "com.mysql:mysql-connector-j:8.3.0")
 
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
+
+// Force resolution so no older transitive flyway-core sneaks in
+/*configurations.all {
+    resolutionStrategy {
+        force("org.flywaydb:flyway-core:9.22.0")
+    }
+}*/
 /*
 flyway {
-    url: ${DB_URL:jdbc:mysql://localhost:3306/portfolio_tracker?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
-    username: ${DB_USER:youruser}
-    password: ${DB_PASS:yourpassword}
+    url = "jdbc:mysql://localhost:3306/portfolio_tracker?useSSL=false&serverTimezone=UTC"
+    user = "devuser"
+    password = "devpass"
     locations = arrayOf("classpath:db/migration")
     driver = "com.mysql.cj.jdbc.Driver"
 }
@@ -48,4 +56,5 @@ flyway {
 tasks.withType<Test> {
     useJUnitPlatform()
 }
+
 
