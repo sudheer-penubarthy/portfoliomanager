@@ -52,7 +52,7 @@ public class UserController {
             }
 
             log.info("Starting ingestion for user: {}, RTA: {}, ImportId: {}", email, rtaName, importId);
-            ingestService.ingestCsvForUser(email, rtaName, file.getInputStream(), importId,isValuationFile);
+            ingestService.ingestCsvForUser(email, rtaName, file.getInputStream(), importId, isValuationFile);
             return ResponseEntity.accepted().body(Map.of("importId", importId));
         } catch (Exception ex) {
             log.debug("Error during ingestion for user: {}, RTA: {}: {}", email, rtaName, ex.getMessage());
