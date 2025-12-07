@@ -86,11 +86,6 @@ $RECYCLE.BIN/
 *.log.lz
 *.log.lzo
 *.log.sz
-/.gradle/
-/.idea/
-/build/
 /gradle/
-/logs/
 /.env
 /1
-/build/
