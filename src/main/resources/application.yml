@@ -30,6 +30,13 @@ amfi:
     read-timeout-ms: 60000
     user-agent: Investment-Tracker/1.0
 
+external:
+  api:
+    base-url: https://localhost:8080
+    connect-timeout-ms: 2000
+    read-timeout-ms: 5000
+
+
 # Logging & server
 server:
   port: 8080
