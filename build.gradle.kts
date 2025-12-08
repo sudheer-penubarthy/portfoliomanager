@@ -29,6 +29,10 @@ dependencies {
    // implementation("org.flywaydb:flyway-core:9.22.0")
     runtimeOnly("com.mysql:mysql-connector-j:8.3.0")
 
+    // MapStruct for DTO <-> Entity mapping
+    implementation("org.mapstruct:mapstruct:1.6.3")
+    annotationProcessor("org.mapstruct:mapstruct-processor:1.6.3")
+
     // Ensure the Flyway Gradle plugin can see the JDBC driver for flywayMigrate
   //  add("flywayRuntime", "com.mysql:mysql-connector-j:8.3.0")
 
@@ -53,6 +57,9 @@ flyway {
     driver = "com.mysql.cj.jdbc.Driver"
 }
 */
+tasks.withType<JavaCompile> {
+    options.annotationProcessorPath = configurations["annotationProcessor"]
+}
 tasks.withType<Test> {
     useJUnitPlatform()
 }

@@ -10,9 +10,9 @@ import org.mapstruct.factory.Mappers;
 public interface PortfolioMapper {
     PortfolioMapper INSTANCE = Mappers.getMapper(PortfolioMapper.class);
 
-    // example mapping; adjust fields to match your DTO/entity
+    /*
     @Mapping(source = "amfiCode", target = "amfiCode")
-    FundDto entityToDto(FundEntity entity);
+    FundDto entityToDto(FundEntity entity);*/
 
     FundEntity dtoToEntity(FundDto dto);
 }
