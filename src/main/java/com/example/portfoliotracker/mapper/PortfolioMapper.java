@@ -10,9 +10,9 @@ import org.mapstruct.factory.Mappers;
 public interface PortfolioMapper {
     PortfolioMapper INSTANCE = Mappers.getMapper(PortfolioMapper.class);
 
-    /*
-    @Mapping(source = "amfiCode", target = "amfiCode")
-    FundDto entityToDto(FundEntity entity);*/
+
+    //@Mapping(source = "amfiCode", target = "amfiCode")
+    FundDto entityToDto(FundEntity entity);
 
     FundEntity dtoToEntity(FundDto dto);
 }
