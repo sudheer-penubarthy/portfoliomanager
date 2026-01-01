@@ -2,6 +2,8 @@ package com.example.portfoliotracker.service;
 
 import com.example.portfoliotracker.entity.AmfiNav;
 import com.example.portfoliotracker.entity.AmfiScheme;
+import com.example.portfoliotracker.entity.AmfiImport;
+import com.example.portfoliotracker.repository.AmfiImportRepository;
 import com.example.portfoliotracker.repository.AmfiNavRepository;
 import com.example.portfoliotracker.repository.AmfiSchemeRepository;
 import com.example.portfoliotracker.repository.FundHouseRepository;
@@ -9,12 +11,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
-import org.mockito.Mockito;
 
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -27,9 +29,11 @@ class AmfiIngestServiceTest {
     private AmfiNavRepository navRepository;
     private AmfiIngestService ingestService;
     private FundHouseRepository fundHouseRepository;
+    private AmfiPersistService persistService;
+    private AmfiImportRepository importRepository;
 
     @Captor
-    ArgumentCaptor<AmfiNav> navCaptor = ArgumentCaptor.forClass(AmfiNav.class);
+    ArgumentCaptor<List> navListCaptor = ArgumentCaptor.forClass(List.class);
 
     @BeforeEach
     void setup() {
@@ -37,7 +41,15 @@ class AmfiIngestServiceTest {
         schemeRepository = mock(AmfiSchemeRepository.class);
         navRepository = mock(AmfiNavRepository.class);
         fundHouseRepository = mock(FundHouseRepository.class);
-        ingestService = new AmfiIngestService(restTemplate, schemeRepository, navRepository, "http://dummy", fundHouseRepository);
+        persistService = mock(AmfiPersistService.class);
+        importRepository = mock(AmfiImportRepository.class);
+        // Ensure importRepository.save(...) returns an entity with an ID to avoid NPE in fetchAndIngest
+        when(importRepository.save(any(AmfiImport.class))).thenAnswer(invocation -> {
+            AmfiImport arg = invocation.getArgument(0);
+            arg.setId(1L);
+            return arg;
+        });
+        ingestService = new AmfiIngestService(restTemplate, schemeRepository, navRepository, fundHouseRepository, persistService, "http://dummy", importRepository);
     }
 
     @Test
@@ -50,9 +62,14 @@ class AmfiIngestServiceTest {
 
         ingestService.fetchAndIngest();
 
-        verify(schemeRepository, atLeastOnce()).save(any(AmfiScheme.class));
-        verify(navRepository).save(navCaptor.capture());
-        AmfiNav savedNav = navCaptor.getValue();
+        verify(persistService, atLeastOnce()).persistSchemesChunk(anyList());
+        verify(persistService, atLeastOnce()).persistNavsJdbcChunk(navListCaptor.capture());
+        List captured = navListCaptor.getValue();
+        assertNotNull(captured);
+        assertFalse(captured.isEmpty());
+        Object first = captured.get(0);
+        assertTrue(first instanceof AmfiNav);
+        AmfiNav savedNav = (AmfiNav) first;
         assertEquals("12345", savedNav.getSchemeCode());
         assertEquals(new BigDecimal("12.34"), savedNav.getNavValue());
         assertEquals(LocalDate.of(2020,1,1), savedNav.getNavDate());
@@ -67,8 +84,8 @@ class AmfiIngestServiceTest {
 
         ingestService.fetchAndIngest();
 
-        verify(schemeRepository, atLeastOnce()).save(any(AmfiScheme.class));
-        verify(navRepository, never()).save(any(AmfiNav.class));
+        verify(persistService, atLeastOnce()).persistSchemesChunk(anyList());
+        verify(persistService, never()).persistNavsJdbcChunk(anyList());
     }
 
     @Test
@@ -82,8 +99,16 @@ class AmfiIngestServiceTest {
 
         ingestService.fetchAndIngest();
 
-        verify(schemeRepository, atLeastOnce()).save(any(AmfiScheme.class));
-        verify(navRepository, never()).save(argThat(nav -> "99999".equals(nav.getSchemeCode())));
+        verify(persistService, atLeastOnce()).persistSchemesChunk(anyList());
+        // capture any calls to persistNavsJdbcChunk and assert none contain a nav with scheme '99999' if any calls occurred
+        try {
+            verify(persistService, atLeastOnce()).persistNavsJdbcChunk(navListCaptor.capture());
+        } catch (org.mockito.exceptions.verification.WantedButNotInvoked e) {
+            // no navs persisted at all - that's acceptable
+            return;
+        }
+        List<List> allCaptured = navListCaptor.getAllValues();
+        boolean found = allCaptured.stream().flatMap(List::stream).anyMatch(o -> o instanceof AmfiNav && "99999".equals(((AmfiNav)o).getSchemeCode()));
+        assertFalse(found, "No persisted nav should have scheme code 99999");
     }
 }
-

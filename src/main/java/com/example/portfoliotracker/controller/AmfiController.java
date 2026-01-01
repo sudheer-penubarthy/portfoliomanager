@@ -77,15 +77,10 @@ public class AmfiController {
     /**
      * POST /api/amfi/sync -> adhoc sync trigger (runs ingest immediately)
      */
-
     @PostMapping("/sync")
     public ResponseEntity<String> triggerSync() {
-        try {
-            ingestService.fetchAndIngestAsync();
-            return ResponseEntity.ok("AMFI ingest triggered");
-        } catch (Exception ex) {
-            return ResponseEntity.status(500).body("Failed to trigger ingest: " + ex.getMessage());
-        }
+        ingestService.fetchAndIngestAsync();
+        return ResponseEntity.ok("AMFI ingest triggered");
     }
 
     /**

@@ -202,7 +202,7 @@ public class AmfiIngestService {
         for (String fhName : fundHouseNames) {
             if (fhName == null) continue;
             if (!fhMap.containsKey(fhName)) {
-                FundHouse fh = FundHouse.builder().name(fhName).createdAt(LocalDateTime.now()).build();
+                FundHouse fh = FundHouse.builder().name(fhName).build();
                 newFundHouses.add(fh);
             }
         }
@@ -243,8 +243,6 @@ public class AmfiIngestService {
                         .fundHouse(pr.getFundHouseName())
                         .fundHouseEntity(fh)
                         .active(true)
-                        .createdAt(LocalDateTime.now())
-                        .updatedAt(LocalDateTime.now())
                         .build();
                 schemeMap.put(scheme.getSchemeCode(), scheme);
                 schemesToSave.add(scheme);
@@ -253,7 +251,6 @@ public class AmfiIngestService {
                 scheme.setSchemeName(pr.getSchemeName() != null ? pr.getSchemeName() : scheme.getSchemeName());
                 scheme.setFundHouse(pr.getFundHouseName());
                 scheme.setFundHouseEntity(fh);
-                scheme.setUpdatedAt(LocalDateTime.now());
                 schemesToSave.add(scheme);
             }
         }
@@ -270,6 +267,11 @@ public class AmfiIngestService {
             if (pr.getNavStr() == null || pr.getNavStr().isEmpty()) continue;
             if (pr.getNavDate() == null) continue;
             try {
+                // Skip if this nav already exists
+                if (navRepository != null && navRepository.findBySchemeCodeAndNavDate(pr.getSchemeCode(), pr.getNavDate()).isPresent()) {
+                    continue;
+                }
+
                 BigDecimal navValue = new BigDecimal(pr.getNavStr().replaceAll(",", ""));
                 AmfiNav nav = AmfiNav.builder().schemeCode(pr.getSchemeCode()).navDate(pr.getNavDate()).navValue(navValue).source("AMFI").createdAt(LocalDateTime.now()).build();
                 navsToSave.add(nav);

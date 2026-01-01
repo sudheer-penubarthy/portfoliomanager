@@ -29,6 +29,11 @@ public class AmfiService {
         this.fundHouseRepository = fundHouseRepository;
     }
 
+    // Backward-compatible constructor used by older tests (and convenient for simple unit testing)
+    public AmfiService(AmfiSchemeRepository schemeRepository, AmfiNavRepository navRepository, AmfiIngestService ingestService) {
+        this(schemeRepository, navRepository, ingestService, null);
+    }
+
     public List<AmfiScheme> findByFundHouse(String fundHouse, boolean activeOnly) {
         if (fundHouse == null || fundHouse.isBlank()) {
             return schemeRepository.findAll();
