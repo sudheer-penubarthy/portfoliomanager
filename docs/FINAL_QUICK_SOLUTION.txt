@@ -1,0 +1,64 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                                                                            ║
+║              ✅ DONE - QUICK BATCH MOVE SOLUTION PROVIDED                 ║
+║                                                                            ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+## What You Need
+
+A simple way to move ALL remaining .md and .txt files to docs/ at once!
+
+---
+
+## 🚀 THE FASTEST WAY (30 seconds)
+
+### Copy-Paste This Command in PowerShell
+
+1. **Open PowerShell** in your project root folder:
+   - Shift+Right-Click → "Open PowerShell window here"
+
+2. **Paste this command:**
+```powershell
+Get-ChildItem -File -Include *.md,*.txt | Where-Object {$_.Name -ne "README.md"} | ForEach-Object { Move-Item -Path $_.FullName -Destination "docs\$($_.Name)" -Force }
+```
+
+3. **Press Enter**
+
+✅ **DONE!** All .md and .txt files moved to docs/ in seconds!
+
+---
+
+## 📋 Alternative: Windows File Explorer (1 minute)
+
+1. Open folder: `C:\development\fincal_projects\portfoliomanager\`
+2. Select all .md and .txt files (skip README.md)
+3. Cut (Ctrl+X)
+4. Open docs/ folder
+5. Paste (Ctrl+V)
+
+---
+
+## ✅ Result
+
+- ✅ All documentation files in docs/
+- ✅ Project root clean
+- ✅ README.md stays in root
+- ✅ Can organize into subfolders later
+
+---
+
+## 📌 For Later
+
+Once all files are in docs/, you can organize them into subfolders:
+- docs/implementation/
+- docs/reference/
+- docs/controllers/
+- docs/guidelines/
+- etc.
+
+But for now, just having them all in docs/ is perfect!
+
+---
+
+**See: `QUICK_BATCH_MOVE.md` in the root folder for more details**
+
