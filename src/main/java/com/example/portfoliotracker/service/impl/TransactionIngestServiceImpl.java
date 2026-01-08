@@ -6,14 +6,18 @@ import com.example.portfoliotracker.entity.UserTransaction;
 import com.example.portfoliotracker.enums.Status;
 import com.example.portfoliotracker.repository.*;
 import com.example.portfoliotracker.service.CamsStreamParser;
+import com.example.portfoliotracker.service.TransactionIngestService;
+import com.example.portfoliotracker.service.ZipHandlerService;
+import com.example.portfoliotracker.util.StringUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.InputStream;
+import java.io.*;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.Charset;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -23,7 +27,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
 @Service
-public class TransactionIngestServiceImpl implements com.example.portfoliotracker.service.TransactionIngestService {
+public class TransactionIngestServiceImpl implements TransactionIngestService {
     private final PortfolioUserRepository userRepo;
     private final ExternalSchemeMapRepository mapRepo;
     private final UserTransactionRepository txnRepo;
@@ -33,8 +37,9 @@ public class TransactionIngestServiceImpl implements com.example.portfoliotracke
     private final JdbcTemplate jdbc;
     private final AmfiImportRepository importRepository;
     private final CamsStreamParser camsStreamParser;
+    private final ZipHandlerService zipHandlerService;
 
-    public TransactionIngestServiceImpl(PortfolioUserRepository userRepo, ExternalSchemeMapRepository mapRepo, UserTransactionRepository txnRepo, UserHoldingRepository holdingRepo, AmfiSchemeRepository schemeRepo, AmfiNavRepository navRepo, AmfiImportRepository importRepository, JdbcTemplate jdbc, CamsStreamParser camsStreamParser) {
+    public TransactionIngestServiceImpl(PortfolioUserRepository userRepo, ExternalSchemeMapRepository mapRepo, UserTransactionRepository txnRepo, UserHoldingRepository holdingRepo, AmfiSchemeRepository schemeRepo, AmfiNavRepository navRepo, AmfiImportRepository importRepository, JdbcTemplate jdbc, CamsStreamParser camsStreamParser, ZipHandlerService zipHandlerService) {
         this.camsStreamParser = camsStreamParser;
         this.userRepo = userRepo;
         this.mapRepo = mapRepo;
@@ -44,90 +49,45 @@ public class TransactionIngestServiceImpl implements com.example.portfoliotracke
         this.navRepo = navRepo;
         this.jdbc = jdbc;
         this.importRepository = importRepository;
+        this.zipHandlerService = zipHandlerService;
     }
 
     /**
      * High-level: accept an InputStream (CSV/TSV) from CAMS/KFin or generic CSV.
      * Minimal parser: expects columns [sourceReference, txnDate(yyyy-MM-dd), rtaCode, txnType, units, amount]
      */
-    @Transactional
-    @Override
-    public Long ingestCsvForUser(String email, String rtaName, InputStream csvStream, Long importId, boolean isValuationFile) throws Exception {
-        PortfolioUser user = userRepo.findByEmail(email).orElseGet(() -> {
-            PortfolioUser u = PortfolioUser.builder().email(email).createdAt(LocalDateTime.now()).build();
-            return userRepo.save(u);
-        });
-        log.info("Ingesting transactions for user: {} (id={}), RTA: {}, importId: {}, isValuationFile: {}", email, user.getId(), rtaName, importId, isValuationFile);
-        // ensure import row exists and save to database
-        if (importId == null) {
-            importId = persistFile(rtaName);
+    public void ingestCsvForUser(
+            String email,
+            String rtaName,
+            byte[] fileBytes,
+            Long importId,
+            boolean isValuation) throws Exception {
+
+        // Hard safety guard – ZIP must never reach here
+        if (fileBytes == null || fileBytes.length == 0) {
+            throw new IllegalArgumentException("Empty file content received");
+        }
+        if (fileBytes.length >= 2 &&
+                fileBytes[0] == 'P' &&
+                fileBytes[1] == 'K') {
+            throw new IllegalArgumentException(
+                    "ZIP binary passed to TransactionIngestService");
         }
 
-        final int BATCH = 1000; // adjust based on memory and DB
-        AtomicInteger rowsProcessed = new AtomicInteger(0);
-        AtomicInteger rowsInserted = new AtomicInteger(0);
-        AtomicInteger rowsSkipped = new AtomicInteger(0);
+        Charset charset = StringUtil.detectCharset(fileBytes); // the one we already fixed
+        log.info("Using charset {} for ingestion (valuation={})",
+                charset.name(), isValuation);
 
-        Long finalImportId = importId;
-
-        if (isValuationFile) {
-            // if valuation snapshot provided, stream and upsert holdings directly
-            List<UserHolding> chunk = new ArrayList<>();
-            camsStreamParser.streamValuation(csvStream, user.getId(), rtaName, h -> {
-                rowsProcessed.incrementAndGet();
-                chunk.add(h);
-                if (chunk.size() >= BATCH) {
-                    // upsert chunk: delete existing matching user holdings for these scheme codes, then insert
-                    List<String> schemeCodes = chunk.stream().map(UserHolding::getSchemeCode).distinct().toList();
-                    // delete existing for this user and these scheme codes
-                    jdbc.update("DELETE FROM user_holding WHERE user_id = ? AND scheme_code IN (" + String.join(",", Collections.nCopies(schemeCodes.size(), "?")) + ")", buildDeleteParams(user.getId(), schemeCodes));
-                    // batch insert
-                    batchInsertHoldings(chunk);
-                    rowsInserted.addAndGet(chunk.size());
-                    importRepository.updateProgress(finalImportId, rowsProcessed.get(), rowsInserted.get(), rowsSkipped.get());
-                    chunk.clear();
-                }
-            });
-            if (!chunk.isEmpty()) {
-                List<String> schemeCodes = chunk.stream().map(UserHolding::getSchemeCode).distinct().toList();
-                jdbc.update("DELETE FROM user_holding WHERE user_id = ? AND scheme_code IN (" + String.join(",", Collections.nCopies(schemeCodes.size(), "?")) + ")", buildDeleteParams(user.getId(), schemeCodes));
-                batchInsertHoldings(chunk);
-                rowsInserted.addAndGet(chunk.size());
-                importRepository.updateProgress(importId, rowsProcessed.get(), rowsInserted.get(), rowsSkipped.get());
-            }
-        } else {
-            // transaction file: stream and batch insert transactions, then recompute holdings
-            log.info("Starting batch import for non -valuation transaction file");
-            List<UserTransaction> tchunk = new ArrayList<>();
-            camsStreamParser.streamTransactions(csvStream, finalImportId, user.getId(), rtaName, txn -> {
-                rowsProcessed.incrementAndGet();
-                // dedupe check (lightweight): skip if sourceReference exists
-                if (txn.getSourceReference() != null && txnRepo.existsByUserIdAndSourceReference(user.getId(), txn.getSourceReference())) {
-                    rowsSkipped.incrementAndGet();
-                    if (rowsProcessed.get() % 500 == 0)
-                        importRepository.updateProgress(finalImportId, rowsProcessed.get(), rowsInserted.get(), rowsSkipped.get());
-                    return; // skip
-                }
-                tchunk.add(txn);
-                if (tchunk.size() >= BATCH) {
-                    log.info("Inserting chunk of {} transactions", tchunk.size());
-                    batchInsertUserTransactions(tchunk);
-                    rowsInserted.addAndGet(tchunk.size());
-                    importRepository.updateProgress(finalImportId, rowsProcessed.get(), rowsInserted.get(), rowsSkipped.get());
-                    tchunk.clear();
-                }
-            });
-            if (!tchunk.isEmpty()) {
-                log.info("Inserting final chunk of {} transactions", tchunk.size());
-                batchInsertUserTransactions(tchunk);
-                log.info("Final chunk inserted");
-                rowsInserted.addAndGet(tchunk.size());
-                importRepository.updateProgress(importId, rowsProcessed.get(), rowsInserted.get(), rowsSkipped.get());
+        try (BufferedReader reader =
+                     new BufferedReader(
+                             new InputStreamReader(
+                                     new ByteArrayInputStream(fileBytes), charset))) {
+            if (isValuation) {
+                ingestValuationFile(reader, email, rtaName, importId);
+            } else {
+                ingestTransactionFile(reader, email, rtaName, importId);
             }
 
-            // recompute holdings after transactions are saved
-            log.info("Recomputing holdings for user id: {}", user.getId());
-            recomputeHoldingsForUser(user.getId());
         }
         log.info("Ingestion completed for user: {} (id={}), RTA: {}, importId: {}. Processed: {}, Inserted: {}, Skipped: {}", email, user.getId(), rtaName, importId, rowsProcessed.get(), rowsInserted.get(), rowsSkipped.get());
         importRepository.updateProgress(importId, rowsProcessed.get(), rowsInserted.get(), rowsSkipped.get());
@@ -135,6 +95,127 @@ public class TransactionIngestServiceImpl implements com.example.portfoliotracke
         importRepository.markCompleted(importId, Status.COMPLETED);
 
         return user.getId();
+    }
+
+/*
+        if (isValuationFile) {
+            insertValuationFile(rtaName, csvStream, importId, user, rowsProcessed, BATCH, rowsInserted, finalImportId, rowsSkipped);
+        } else {
+            insertTransactionFileAndRecomputeHoldings(rtaName, csvStream, importId, finalImportId, user, rowsProcessed, rowsSkipped, rowsInserted, BATCH);
+        }*/
+
+    }
+
+    private void ingestTransactionFile(
+            BufferedReader reader,
+            String email,
+            String rtaName,
+            Long importId) throws Exception {
+
+        String line;
+        int lineNo = 0;
+
+        while ((line = reader.readLine()) != null) {
+            lineNo++;
+
+            // skip header if needed
+            if (lineNo == 1) {
+                continue;
+            }
+
+            String[] cols = line.split("\t", -1);
+
+            // existing validation / parsing logic here
+            // persist transactions
+        }
+    }
+
+    private void ingestValuationFile(
+            BufferedReader reader,
+            String email,
+            String rtaName,
+            Long importId) throws Exception {
+
+        String line;
+        int lineNo = 0;
+
+        while ((line = reader.readLine()) != null) {
+            lineNo++;
+
+            // skip header if needed
+            if (lineNo == 1) {
+                continue;
+            }
+
+            String[] cols = line.split("\t", -1);
+
+            // existing validation / parsing logic here
+
+            // persist holdings
+        }
+    }
+
+
+    private void insertTransactionFileAndRecomputeHoldings(String rtaName, InputStream csvStream, Long importId, Long finalImportId, PortfolioUser user, AtomicInteger rowsProcessed, AtomicInteger rowsSkipped, AtomicInteger rowsInserted, int BATCH) throws Exception {
+        // transaction file: stream and batch insert transactions, then recompute holdings
+        log.info("Starting batch import for non -valuation transaction file");
+        List<UserTransaction> tchunk = new ArrayList<>();
+        camsStreamParser.streamTransactions(csvStream, finalImportId, user.getId(), rtaName, txn -> {
+            rowsProcessed.incrementAndGet();
+            // dedupe check (lightweight): skip if sourceReference exists
+            if (txn.getSourceReference() != null && txnRepo.existsByUserIdAndSourceReference(user.getId(), txn.getSourceReference())) {
+                rowsSkipped.incrementAndGet();
+                if (rowsProcessed.get() % 500 == 0)
+                    importRepository.updateProgress(finalImportId, rowsProcessed.get(), rowsInserted.get(), rowsSkipped.get());
+                return; // skip
+            }
+            tchunk.add(txn);
+            if (tchunk.size() >= BATCH) {
+                log.info("Inserting chunk of {} transactions", tchunk.size());
+                batchInsertUserTransactions(tchunk);
+                rowsInserted.addAndGet(tchunk.size());
+                importRepository.updateProgress(finalImportId, rowsProcessed.get(), rowsInserted.get(), rowsSkipped.get());
+                tchunk.clear();
+            }
+        });
+        if (!tchunk.isEmpty()) {
+            log.info("Inserting final chunk of {} transactions", tchunk.size());
+            batchInsertUserTransactions(tchunk);
+            log.info("Final chunk inserted");
+            rowsInserted.addAndGet(tchunk.size());
+            importRepository.updateProgress(importId, rowsProcessed.get(), rowsInserted.get(), rowsSkipped.get());
+        }
+
+        // recompute holdings after transactions are saved
+        log.info("Recomputing holdings for user id: {}", user.getId());
+        recomputeHoldingsForUser(user.getId());
+    }
+
+    private void insertValuationFile(String rtaName, InputStream csvStream, Long importId, PortfolioUser user, AtomicInteger rowsProcessed, int BATCH, AtomicInteger rowsInserted, Long finalImportId, AtomicInteger rowsSkipped) throws Exception {
+        // if valuation snapshot provided, stream and upsert holdings directly
+        List<UserHolding> chunk = new ArrayList<>();
+        camsStreamParser.streamValuation(csvStream, user.getId(), rtaName, h -> {
+            rowsProcessed.incrementAndGet();
+            chunk.add(h);
+            if (chunk.size() >= BATCH) {
+                // upsert chunk: delete existing matching user holdings for these scheme codes, then insert
+                List<String> schemeCodes = chunk.stream().map(UserHolding::getSchemeCode).distinct().toList();
+                // delete existing for this user and these scheme codes
+                jdbc.update("DELETE FROM user_holding WHERE user_id = ? AND scheme_code IN (" + String.join(",", Collections.nCopies(schemeCodes.size(), "?")) + ")", buildDeleteParams(user.getId(), schemeCodes));
+                // batch insert
+                batchInsertHoldings(chunk);
+                rowsInserted.addAndGet(chunk.size());
+                importRepository.updateProgress(finalImportId, rowsProcessed.get(), rowsInserted.get(), rowsSkipped.get());
+                chunk.clear();
+            }
+        });
+        if (!chunk.isEmpty()) {
+            List<String> schemeCodes = chunk.stream().map(UserHolding::getSchemeCode).distinct().toList();
+            jdbc.update("DELETE FROM user_holding WHERE user_id = ? AND scheme_code IN (" + String.join(",", Collections.nCopies(schemeCodes.size(), "?")) + ")", buildDeleteParams(user.getId(), schemeCodes));
+            batchInsertHoldings(chunk);
+            rowsInserted.addAndGet(chunk.size());
+            importRepository.updateProgress(importId, rowsProcessed.get(), rowsInserted.get(), rowsSkipped.get());
+        }
     }
 
     private Long persistFile(String rtaName) {
@@ -222,7 +303,7 @@ public class TransactionIngestServiceImpl implements com.example.portfoliotracke
     @Transactional
     @Override
     public void recomputeHoldingsForUser(Long userId) {
-    // aggregate units and total cost per scheme (BUY adds units/amount, SELL subtracts)
+        // aggregate units and total cost per scheme (BUY adds units/amount, SELL subtracts)
         String sql = "SELECT scheme_code, SUM(CASE WHEN txn_type='BUY' THEN units WHEN txn_type IN ('SELL') THEN -units ELSE 0 END) AS units, " + "SUM(CASE WHEN txn_type='BUY' THEN amount WHEN txn_type IN ('SELL') THEN -amount ELSE 0 END) AS net_amount " + "FROM user_transaction WHERE user_id = ? GROUP BY scheme_code";
 
 
@@ -235,7 +316,7 @@ public class TransactionIngestServiceImpl implements com.example.portfoliotracke
             java.math.BigDecimal units = (java.math.BigDecimal) r.get("units");
             java.math.BigDecimal netAmount = (java.math.BigDecimal) r.get("net_amount");
             if (units == null || units.compareTo(java.math.BigDecimal.ZERO) == 0) {
-            // remove holding if exists
+                // remove holding if exists
                 Optional<UserHolding> ex = holdingRepo.findByUserIdAndSchemeCode(userId, schemeCode);
                 ex.ifPresent(h -> holdingRepo.delete(h));
                 continue;
@@ -289,4 +370,25 @@ public class TransactionIngestServiceImpl implements com.example.portfoliotracke
         return out;
     }
 
+    /**
+     * Extract files from a ZIP archive using ZipHandlerService.
+     */
+    @Override
+    public ZipHandlerService.ExtractedFiles extractFilesFromZip(InputStream zipInputStream) throws Exception {
+        log.debug("Delegating ZIP extraction to ZipHandlerService");
+        return zipHandlerService.extractFromZip(zipInputStream);
+    }
+
+    /**
+     * Extract files from a password-protected ZIP archive using ZipHandlerService.
+     */
+    @Override
+    public ZipHandlerService.ExtractedFiles extractFilesFromZip(InputStream zipInputStream, String password) throws Exception {
+        log.debug("Delegating password-protected ZIP extraction to ZipHandlerService");
+        if (password == null || password.isEmpty()) {
+            log.warn("Password provided for ZIP extraction but is empty or null, attempting non-protected extraction");
+            return zipHandlerService.extractFromZip(zipInputStream);
+        }
+        return zipHandlerService.extractFromPasswordProtectedZip(zipInputStream, password);
+    }
 }

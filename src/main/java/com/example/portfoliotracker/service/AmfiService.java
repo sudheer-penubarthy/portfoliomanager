@@ -7,6 +7,7 @@ import com.example.portfoliotracker.repository.AmfiNavRepository;
 import com.example.portfoliotracker.repository.AmfiSchemeRepository;
 import com.example.portfoliotracker.repository.FundHouseRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -22,6 +23,7 @@ public class AmfiService {
     private final FundHouseRepository fundHouseRepository;
 
 
+    @Autowired
     public AmfiService(AmfiSchemeRepository schemeRepository, AmfiNavRepository navRepository, AmfiIngestService ingestService, FundHouseRepository fundHouseRepository) {
         this.schemeRepository = schemeRepository;
         this.navRepository = navRepository;

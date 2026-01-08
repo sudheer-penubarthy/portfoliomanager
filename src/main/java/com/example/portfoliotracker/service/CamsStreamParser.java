@@ -10,10 +10,10 @@ import com.example.portfoliotracker.repository.ExternalSchemeMapRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.math.BigDecimal;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Locale;
@@ -36,6 +36,63 @@ public class CamsStreamParser {
 
     public CamsStreamParser(ExternalSchemeMapRepository mapRepo) {
         this.mapRepo = mapRepo;
+    }
+
+    /**
+     * Detect the encoding of an InputStream by reading the first line with multiple encodings.
+     * Tries UTF-8 first, then ISO-8859-1, then Windows-1252.
+     * Returns a buffered reader with the detected encoding.
+     */
+    private BufferedReader createBufferedReaderWithEncodingDetection(InputStream is) throws IOException {
+        // Read first chunk to detect encoding
+        byte[] firstBytes = new byte[8192];
+        int bytesRead = is.read(firstBytes);
+
+        log.debug("Read {} bytes from input stream for encoding detection", bytesRead);
+
+        // Try different charsets in order
+        Charset[] charsets = {
+                StandardCharsets.UTF_8,
+                StandardCharsets.ISO_8859_1,
+                Charset.forName("Windows-1252")
+        };
+
+        String firstLine = null;
+        Charset detectedCharset = Charset.forName("Windows-1252");//StandardCharsets.UTF_8;
+
+        for (Charset charset : charsets) {
+            try {
+                firstLine = new String(firstBytes, 0, bytesRead, charset);
+                // Log what we read
+                log.debug("Trying charset {}: first 100 chars: {}", charset.name(),
+                        firstLine.length() > 0 ? firstLine.substring(0, Math.min(100, firstLine.length())) : "(empty)");
+
+                // Check if it looks valid (contains tabs and reasonable characters)
+                if (firstLine.contains("\t")) {
+                    // Found a valid tab-separated format
+                    detectedCharset = charset;
+                    log.info("Detected file encoding: {} (found tab-separated header)", charset.name());
+                    log.debug("Header line: {}", firstLine.substring(0, Math.min(200, firstLine.length())));
+                    break;
+                }
+            } catch (Exception ex) {
+                log.trace("Charset {} failed: {}", charset.name(), ex.getMessage());
+            }
+        }
+
+        if (firstLine == null || !firstLine.contains("\t")) {
+            log.warn("Could not find valid tab-separated format in first {} bytes. Stream may be corrupted or not in expected format.", bytesRead);
+            log.warn("First 200 chars (UTF-8 attempt): {}",
+                    new String(firstBytes, 0, Math.min(200, bytesRead), StandardCharsets.UTF_8));
+        }
+
+        log.info("Using charset: {} for file parsing", detectedCharset.name());
+
+        // Create a new InputStream that starts from the beginning
+        ByteArrayInputStream baos = new ByteArrayInputStream(firstBytes, 0, bytesRead);
+        SequenceInputStream combined = new SequenceInputStream(baos, is);
+
+        return new BufferedReader(new InputStreamReader(combined, detectedCharset));
     }
 
     private LocalDate parseDateLenient(String s) {
@@ -84,7 +141,7 @@ public class CamsStreamParser {
         String[] cols = headerLine.split(sepRegex, -1);
         Map<String, Integer> map = new HashMap<>();
         for (int i = 0; i < cols.length; i++) {
-            String key = cols[i].trim().toLowerCase(Locale.ROOT).replaceAll("", "").replaceAll("", "");
+            String key = cols[i].trim().toLowerCase(Locale.ROOT);
             map.put(key, i);
         }
         return map;
@@ -120,7 +177,7 @@ public class CamsStreamParser {
      * The consumer receives a built UserTransaction (not persisted).
      */
     public void streamTransactions(InputStream is, Long importId, Long userId, String rtaName, Consumer<UserTransaction> consumer) throws Exception {
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(is))) {
+        try (BufferedReader br = createBufferedReaderWithEncodingDetection(is)) {
             String header = br.readLine();
             if (header == null) return;
             Map<String, Integer> hm = headerMap(header, "\t");
@@ -130,13 +187,14 @@ public class CamsStreamParser {
                 lineno++;
                 if (line.isBlank()) continue;
                 String[] cols = line.split("\t", -1);
+
                 try {
                     String mfName = readCol(cols, hm, "mf_name", "mf name", "amc name");
                     String pan = readCol(cols, hm, "pan");
                     String folio = readCol(cols, hm, "folio_number", "folio");
                     String productCode = readCol(cols, hm, "product_code", "schemecode", "product code");
                     String schemeName = readCol(cols, hm, "scheme_name", "scheme name", "scheme");
-                    String tradeDate = readCol(cols, hm, "trade_date", "trade date");
+                    String tradeDate = readCol(cols, hm, "TRADE_DATE", "trade date");
                     String transactionType = readCol(cols, hm, "transaction_type", "transaction type");
                     String amountStr = readCol(cols, hm, "amount");
                     String unitsStr = readCol(cols, hm, "units");
@@ -147,6 +205,35 @@ public class CamsStreamParser {
                     BigDecimal amount = parseBigDecimalLenient(amountStr);
                     BigDecimal price = parseBigDecimalLenient(priceStr);
                     String txnType = mapCamsTxnType(transactionType);
+
+                    // Validate mandatory fields: txnDate is required and cannot be null
+                    if (txnDate == null) {
+                        StringBuilder colsLog = new StringBuilder("[");
+                        for (int i = 0; i < cols.length; i++) {
+                            if (i > 0) colsLog.append(", ");
+                            colsLog.append("'").append(cols[i]).append("'");
+                        }
+                        colsLog.append("]");
+
+                        // Additional validation: check if line looks corrupted
+                        boolean lineCorrupted = line.contains("?") || line.contains("\u0000") ||
+                                (line.length() > 0 && (byte) line.charAt(0) < 32 && line.charAt(0) != '\t');
+
+                        if (lineCorrupted) {
+                            log.error("CORRUPTED LINE DETECTED at line {}: Possible file encoding issue or corrupted stream. Raw bytes: {}",
+                                    lineno, lineToHex(line.substring(0, Math.min(50, line.length()))));
+                        }
+
+                        log.warn("Skipping transaction at line {}: txn_date is mandatory but could not be parsed from: '{}'. Raw line (first 100 chars): '{}'. All columns: {}",
+                                lineno, tradeDate, line.substring(0, Math.min(100, line.length())), colsLog);
+                        continue;
+                    }
+
+                    // Validate units and amount exist
+                    if (units == null || amount == null) {
+                        log.warn("Skipping transaction at line {}: units or amount is missing", lineno);
+                        continue;
+                    }
 
                     String schemeCode = productCode != null ? productCode : schemeName;
                     // try mapping via external map
@@ -185,8 +272,8 @@ public class CamsStreamParser {
                             .txnDate(txnDate)
                             .schemeCode(schemeCode)
                             .txnType(TxnType.valueOf(txnType))
-                            .units(units == null ? BigDecimal.ZERO : units)
-                            .amount(amount == null ? BigDecimal.ZERO : amount)
+                            .units(units)
+                            .amount(amount)
                             .pricePerUnit(price)
                             .remarks(mfName + (schemeName != null ? " | " + schemeName : ""))
                             .importId(importId)
@@ -205,7 +292,7 @@ public class CamsStreamParser {
      * Stream parse valuation TSV and call consumer for each parsed UserHolding.
      */
     public void streamValuation(InputStream is, Long userId, String rtaName, Consumer<UserHolding> consumer) throws Exception {
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(is))) {
+        try (BufferedReader br = createBufferedReaderWithEncodingDetection(is)) {
             String header = br.readLine();
             if (header == null) return;
             Map<String, Integer> hm = headerMap(header, "\t");
@@ -254,5 +341,13 @@ public class CamsStreamParser {
             }
         }
     }
-}
 
+    private String lineToHex(String line) {
+        if (line == null || line.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        for (char c : line.toCharArray()) {
+            sb.append(String.format("%02X ", (int) c));
+        }
+        return sb.toString();
+    }
+}
