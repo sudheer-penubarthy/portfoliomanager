@@ -1,8 +1,8 @@
-package com.example.portfoliotracker.controller;
+package com.example.portfoliotracker.api.controller;
 
-import com.example.portfoliotracker.entity.AmfiNav;
-import com.example.portfoliotracker.entity.AmfiScheme;
-import com.example.portfoliotracker.entity.FundHouse;
+import com.example.portfoliotracker.infrastructure.persistence.entity.AmfiNav;
+import com.example.portfoliotracker.infrastructure.persistence.entity.AmfiScheme;
+import com.example.portfoliotracker.infrastructure.persistence.entity.FundHouse;
 import com.example.portfoliotracker.repository.AmfiSchemeRepository;
 import com.example.portfoliotracker.repository.FundHouseRepository;
 import com.example.portfoliotracker.service.AmfiIngestService;
@@ -22,16 +22,17 @@ import java.util.stream.Collectors;
 public class AmfiController {
     private final AmfiService amfiService;
     private final AmfiIngestService ingestService;
-    private final FundHouseRepository fundHouseRepository;
+    //private final FundHouseRepository fundHouseRepository;
     private final AmfiSchemeRepository schemeRepository;
 
     public AmfiController(AmfiService amfiService,
                           AmfiIngestService ingestService,
-                          FundHouseRepository fundHouseRepository,
-                          AmfiSchemeRepository schemeRepository) {
+                          //FundHouseRepository fundHouseRepository,
+                          AmfiSchemeRepository schemeRepository
+                          ) {
         this.amfiService = amfiService;
         this.ingestService = ingestService;
-        this.fundHouseRepository = fundHouseRepository;
+        //this.fundHouseRepository = fundHouseRepository;
         this.schemeRepository = schemeRepository;
     }
 
@@ -85,7 +86,10 @@ public class AmfiController {
 
     /**
      * List fund houses with scheme counts
+     * Internally used by frontend; deprecated for external use
+     * TODO: This will be replaced by SyncAmfiDataUseCase
      */
+    @Deprecated
     @GetMapping("/fundhouses")
     public ResponseEntity<List<Map<String, ? extends Serializable>>> listFundHouses() {
         List<FundHouse> houses = amfiService.listFundHousesWithCounts();
