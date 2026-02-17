@@ -1,0 +1,40 @@
+<mat-toolbar color="primary">
+  <span class="spacer">Portfolio Manager</span>
+
+  <button mat-icon-button routerLink="/dashboard" matTooltip="Dashboard">
+    <mat-icon>dashboard</mat-icon>
+  </button>
+
+  <button mat-icon-button routerLink="/portfolio" matTooltip="Portfolio">
+    <mat-icon>trending_up</mat-icon>
+  </button>
+
+  <button mat-icon-button routerLink="/goals" matTooltip="Goals">
+    <mat-icon>flag</mat-icon>
+  </button>
+
+  <div *ngIf="isLoggedIn$ | async as user" [matMenuTriggerFor]="menu">
+    <button mat-icon-button>
+      <mat-icon>account_circle</mat-icon>
+    </button>
+  </div>
+
+  <mat-menu #menu="matMenu">
+    <button mat-menu-item routerLink="/profile">
+      <mat-icon>person</mat-icon>
+      <span>Profile</span>
+    </button>
+    <button mat-menu-item (click)="logout()">
+      <mat-icon>logout</mat-icon>
+      <span>Logout</span>
+    </button>
+  </mat-menu>
+
+  <a *ngIf="!(isLoggedIn$ | async)" mat-button routerLink="/auth/login">
+    Login
+  </a>
+  <a *ngIf="!(isLoggedIn$ | async)" mat-button routerLink="/auth/register">
+    Register
+  </a>
+</mat-toolbar>
+

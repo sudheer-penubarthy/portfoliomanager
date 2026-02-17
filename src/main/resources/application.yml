@@ -6,7 +6,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
-      ddl-auto: validate     # use 'validate' in dev; Flyway will manage schema
+      ddl-auto: none     # Flyway manages schema, not Hibernate. Set to 'none' to prevent validation errors
     properties:
       hibernate:
         format_sql: true
@@ -14,12 +14,30 @@ spring:
           batch_size: 500
           order_inserts: true
           order_updates: true
+        # Physical naming strategy to convert camelCase to snake_case
+        physical_naming_strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
     show-sql: false
+  sql:
+    init:
+      continue-on-error: false
 
 flyway:
-  enabled: false
-  defer-datasource-initialization: true
+  enabled: true
+  clean-disabled: false
+  defer-datasource-initialization: false
   locations: classpath:db/migration
+  baselineOnMigrate: true
+  baselineVersion: 1
+  baselineDescription: Initial Schema
+  validateOnMigrate: false
+  outOfOrder: true
+  repair-on-migrate: true
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:your-super-secret-key-minimum-32-characters-long-for-hs256-algorithm}
+  access-token-expiration: ${JWT_ACCESS_EXPIRATION:1800000}  # 30 minutes in milliseconds
+  refresh-token-expiration: ${JWT_REFRESH_EXPIRATION:604800000}  # 7 days in milliseconds
 
 # App-specific properties for AMFI ingestion
 amfi:

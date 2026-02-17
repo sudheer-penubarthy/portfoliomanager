@@ -4,12 +4,13 @@ plugins {
     id("org.springframework.boot") version "3.2.2"
     id("io.spring.dependency-management") version "1.1.0"
     java
+    jacoco
     //id("org.flywaydb.flyway") version "9.22.0"    // <-- add the Gradle Flyway plugin
 }
 
 
 
-group = "com.example"
+group = "com.sudheer"
 version = "0.1.0"
 java {
     toolchain {
@@ -27,15 +28,20 @@ dependencies {
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.1.0")
     implementation("org.springframework.boot:spring-boot-starter-validation")
 
-   // implementation("org.flywaydb:flyway-core:9.22.0")
-    runtimeOnly("com.mysql:mysql-connector-j:8.3.0")
+    // JWT Token Support
+    implementation("io.jsonwebtoken:jjwt-api:0.12.3")
+    runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.3")
+    runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.3")
+
+    // Flyway for database migrations (with MySQL 8.0 support)
+    implementation("org.flywaydb:flyway-core:9.22.3")
+    implementation("org.flywaydb:flyway-mysql:9.22.3")
+    implementation("com.mysql:mysql-connector-j:8.3.0")
 
     // MapStruct for DTO <-> Entity mapping
     implementation("org.mapstruct:mapstruct:1.6.3")
     annotationProcessor("org.mapstruct:mapstruct-processor:1.6.3")
 
-    // Ensure the Flyway Gradle plugin can see the JDBC driver for flywayMigrate
-  //  add("flywayRuntime", "com.mysql:mysql-connector-j:8.3.0")
 
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
@@ -64,5 +70,19 @@ tasks.withType<JavaCompile> {
 tasks.withType<Test> {
     useJUnitPlatform()
 }
+
+// JaCoCo Code Coverage Configuration
+jacoco {
+    toolVersion = "0.8.10"
+}
+
+tasks.test {
+    finalizedBy(tasks.jacocoTestReport)
+}
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+}
+
 
 

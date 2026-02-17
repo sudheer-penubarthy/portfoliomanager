@@ -1,0 +1,58 @@
+<div class="container">
+  <mat-card class="form-card">
+    <mat-card-header>
+      <mat-card-title>{{ isEditMode ? 'Edit Goal' : 'Create New Goal' }}</mat-card-title>
+    </mat-card-header>
+
+    <mat-card-content>
+      <div *ngIf="error" class="error-message">
+        {{ error }}
+      </div>
+
+      <form [formGroup]="form" (ngSubmit)="onSubmit()">
+        <mat-form-field class="full-width">
+          <mat-label>Goal Name</mat-label>
+          <input matInput formControlName="name" [disabled]="loading" placeholder="e.g., Retirement Fund">
+          <mat-error *ngIf="submitted && f['name'].errors">
+            <span *ngIf="f['name'].errors['required']">Goal name is required</span>
+            <span *ngIf="f['name'].errors['minlength']">Minimum 3 characters</span>
+          </mat-error>
+        </mat-form-field>
+
+        <mat-form-field class="full-width">
+          <mat-label>Description</mat-label>
+          <textarea matInput formControlName="description" [disabled]="loading" rows="3"></textarea>
+        </mat-form-field>
+
+        <mat-form-field class="full-width">
+          <mat-label>Target Amount (₹)</mat-label>
+          <input matInput type="number" formControlName="targetAmount" [disabled]="loading">
+          <mat-error *ngIf="submitted && f['targetAmount'].errors">
+            <span *ngIf="f['targetAmount'].errors['required']">Target amount is required</span>
+            <span *ngIf="f['targetAmount'].errors['min']">Amount must be greater than 0</span>
+          </mat-error>
+        </mat-form-field>
+
+        <mat-form-field class="full-width">
+          <mat-label>Target Date</mat-label>
+          <input matInput [matDatepicker]="picker" formControlName="targetDate" [disabled]="loading">
+          <mat-datepicker-toggle matIconSuffix [for]="picker"></mat-datepicker-toggle>
+          <mat-datepicker #picker></mat-datepicker>
+          <mat-error *ngIf="submitted && f['targetDate'].errors">
+            <span *ngIf="f['targetDate'].errors['required']">Target date is required</span>
+          </mat-error>
+        </mat-form-field>
+
+        <div class="button-group">
+          <button mat-raised-button color="primary" type="submit" [disabled]="loading">
+            {{ isEditMode ? 'Update Goal' : 'Create Goal' }}
+          </button>
+          <button mat-button type="button" (click)="cancel()">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </mat-card-content>
+  </mat-card>
+</div>
+

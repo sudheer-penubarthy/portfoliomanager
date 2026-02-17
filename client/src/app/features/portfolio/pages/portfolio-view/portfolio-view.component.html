@@ -1,0 +1,70 @@
+<div class="container" *ngIf="!loading; else loadingTemplate">
+  <h1 class="page-title">Portfolio Summary</h1>
+
+  <div *ngIf="error" class="error-message">
+    {{ error }}
+  </div>
+
+  <div *ngIf="portfolio" class="portfolio-summary">
+    <div class="summary-grid">
+      <mat-card class="summary-card">
+        <mat-card-header>
+          <mat-card-title>Current Portfolio Value</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div class="amount">{{ portfolio.currentPortfolioValue | currency:'INR' }}</div>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card class="summary-card">
+        <mat-card-header>
+          <mat-card-title>Total Invested</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div class="amount">{{ portfolio.totalInvestedAmount | currency:'INR' }}</div>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card class="summary-card">
+        <mat-card-header>
+          <mat-card-title>Total Gain/Loss</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div class="amount" [ngClass]="portfolio.totalGain >= 0 ? 'positive' : 'negative'">
+            {{ portfolio.totalGain | currency:'INR' }}
+            <span class="percentage">({{ portfolio.gainPercentage | number:'1.2-2' }}%)</span>
+          </div>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card class="summary-card">
+        <mat-card-header>
+          <mat-card-title>XIRR</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div class="amount" [ngClass]="portfolio.xirr >= 0 ? 'positive' : 'negative'">
+            {{ portfolio.xirr | number:'1.2-2' }}%
+          </div>
+        </mat-card-content>
+      </mat-card>
+    </div>
+
+    <mat-card class="holdings-card">
+      <mat-card-header>
+        <mat-card-title>Holdings Summary</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <p>Total Funds: {{ portfolio.totalFunds }}</p>
+        <p>Active Holdings: {{ portfolio.totalHoldings }}</p>
+      </mat-card-content>
+    </mat-card>
+  </div>
+</div>
+
+<ng-template #loadingTemplate>
+  <div class="loading-container">
+    <mat-spinner diameter="50"></mat-spinner>
+    <p>Loading portfolio data...</p>
+  </div>
+</ng-template>
+

@@ -1,0 +1,153 @@
+<div class="upload-container">
+  <mat-card class="upload-card">
+    <mat-card-header>
+      <mat-card-title>Upload Transactions & Valuations</mat-card-title>
+      <mat-card-subtitle>Upload transaction files, valuation snapshots, or a ZIP archive with your investment data</mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      <!-- Success Message -->
+      <div *ngIf="success" class="success-message">
+        <strong>Success!</strong> {{ success }}
+      </div>
+
+      <!-- Error Message -->
+      <div *ngIf="error" class="error-message">
+        <strong>Error:</strong> {{ error }}
+      </div>
+
+      <form [formGroup]="form" (ngSubmit)="onSubmit()">
+        <!-- User Email -->
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Email Address</mat-label>
+          <input matInput
+                 formControlName="email"
+                 type="email"
+                 readonly
+                 placeholder="Your registered email">
+          <mat-error *ngIf="f['email'].hasError('required')">
+            Email is required
+          </mat-error>
+          <mat-error *ngIf="f['email'].hasError('email')">
+            Please enter a valid email address
+          </mat-error>
+        </mat-form-field>
+
+        <!-- RTA Name Selection -->
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>RTA / Fund House</mat-label>
+          <mat-select formControlName="rtaName">
+            <mat-option></mat-option>
+            <mat-option *ngFor="let rta of rtaOptions" [value]="rta.value">
+              {{ rta.label }}
+            </mat-option>
+          </mat-select>
+          <mat-error *ngIf="f['rtaName'].hasError('required')">
+            RTA name is required
+          </mat-error>
+        </mat-form-field>
+
+        <!-- File Upload Section -->
+        <div class="file-upload-section">
+          <h3>Upload Files</h3>
+          <p class="upload-hint">
+            <strong>Note:</strong> Email in your uploaded files must match your registered email ({{ currentUserEmail }})
+          </p>
+
+          <!-- Transaction File -->
+          <div class="file-input-group">
+            <label class="file-label">
+              <span class="label-text">Transaction File (Optional)</span>
+              <span class="file-name">{{ getFileDisplayName(transactionFile) }}</span>
+              <input type="file"
+                     (change)="onTransactionFileSelected($event)"
+                     accept=".csv,.txt,.xlsx,.xls"
+                     style="display: none;">
+            </label>
+            <button *ngIf="transactionFile"
+                    type="button"
+                    class="clear-button"
+                    (click)="clearFile('transaction')">
+              Clear
+            </button>
+          </div>
+
+          <!-- Valuation File -->
+          <div class="file-input-group">
+            <label class="file-label">
+              <span class="label-text">Valuation File (Optional)</span>
+              <span class="file-name">{{ getFileDisplayName(valuationFile) }}</span>
+              <input type="file"
+                     (change)="onValuationFileSelected($event)"
+                     accept=".csv,.txt,.xlsx,.xls"
+                     style="display: none;">
+            </label>
+            <button *ngIf="valuationFile"
+                    type="button"
+                    class="clear-button"
+                    (click)="clearFile('valuation')">
+              Clear
+            </button>
+          </div>
+
+          <!-- ZIP File -->
+          <div class="file-input-group">
+            <label class="file-label">
+              <span class="label-text">ZIP Archive (Optional)</span>
+              <span class="file-name">{{ getFileDisplayName(zipFile) }}</span>
+              <input type="file"
+                     (change)="onZipFileSelected($event)"
+                     accept=".zip"
+                     style="display: none;">
+            </label>
+            <button *ngIf="zipFile"
+                    type="button"
+                    class="clear-button"
+                    (click)="clearFile('zip')">
+              Clear
+            </button>
+          </div>
+
+          <!-- ZIP Password (conditional) -->
+          <mat-form-field appearance="outline" class="full-width" *ngIf="zipFile">
+            <mat-label>ZIP Password (if encrypted)</mat-label>
+            <input matInput
+                   formControlName="zipPassword"
+                   type="password"
+                   placeholder="Leave blank if ZIP is not password protected">
+          </mat-form-field>
+        </div>
+
+        <!-- Submit Buttons -->
+        <div class="button-group">
+          <button mat-raised-button
+                  color="primary"
+                  type="submit"
+                  [disabled]="loading">
+            <mat-spinner *ngIf="loading" diameter="20" class="button-spinner"></mat-spinner>
+            {{ loading ? 'Uploading...' : 'Upload Files' }}
+          </button>
+          <button mat-stroked-button
+                  type="button"
+                  (click)="resetForm()"
+                  [disabled]="loading">
+            Clear Form
+          </button>
+        </div>
+
+        <!-- Help Text -->
+        <div class="help-section">
+          <h4>Requirements:</h4>
+          <ul>
+            <li>Your email must be included in the uploaded files</li>
+            <li>Upload at least one file (transaction, valuation, or ZIP)</li>
+            <li>Select your fund house/RTA name</li>
+            <li>If using a ZIP file, include transaction and/or valuation files inside</li>
+            <li>All file contents must contain your registered email address</li>
+          </ul>
+        </div>
+      </form>
+    </mat-card-content>
+  </mat-card>
+</div>
+
