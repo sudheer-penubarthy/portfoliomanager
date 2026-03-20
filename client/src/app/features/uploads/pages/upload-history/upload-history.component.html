@@ -1,0 +1,160 @@
+<div class="upload-history-page">
+  <!-- Dashboard Cards -->
+  <app-upload-dashboard [uploadHistory]="uploadHistory"></app-upload-dashboard>
+
+  <!-- Main Card -->
+  <mat-card class="upload-history-card">
+    <!-- Header -->
+    <mat-toolbar color="primary" class="table-toolbar">
+      <h2 class="toolbar-title">Upload History</h2>
+      <span class="spacer"></span>
+      <button mat-icon-button (click)="refresh()" [disabled]="isLoading" matTooltip="Refresh">
+        <mat-icon>refresh</mat-icon>
+      </button>
+    </mat-toolbar>
+
+    <mat-card-content>
+      <!-- Loading Spinner -->
+      <div *ngIf="isLoading" class="loading-container">
+        <mat-spinner diameter="50"></mat-spinner>
+        <p>Loading your upload history...</p>
+      </div>
+
+      <!-- Error State -->
+      <div *ngIf="hasError && !isLoading" class="error-container">
+        <mat-icon class="error-icon">error_outline</mat-icon>
+        <p>{{ errorMessage }}</p>
+        <button mat-raised-button color="primary" (click)="retry()">
+          <mat-icon>refresh</mat-icon>
+          Retry
+        </button>
+      </div>
+
+      <!-- Empty State -->
+      <div *ngIf="!isLoading && !hasError && uploadHistory.length === 0" class="empty-state-container">
+        <mat-icon class="empty-icon">upload_file</mat-icon>
+        <p class="empty-title">No uploads yet</p>
+        <p class="empty-subtitle">Your uploaded files will appear here</p>
+      </div>
+
+      <!-- Filters (show only when data exists) -->
+      <div *ngIf="!isLoading && !hasError && uploadHistory.length > 0" class="filters-container">
+        <mat-form-field appearance="outline" class="search-field">
+          <mat-label>Search by file name</mat-label>
+          <input matInput [(ngModel)]="searchFilter" (input)="applyFilters()" placeholder="Enter file name">
+          <mat-icon matSuffix>search</mat-icon>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="filter-field">
+          <mat-label>Filter by status</mat-label>
+          <select matNativeControl [(ngModel)]="statusFilter" (change)="applyFilters()">
+            <option value="">All</option>
+            <option value="UPLOADED">Uploaded</option>
+            <option value="PROCESSING">Processing</option>
+            <option value="COMPLETED">Completed</option>
+            <option value="FAILED">Failed</option>
+          </select>
+        </mat-form-field>
+
+        <button mat-stroked-button (click)="clearFilters()" *ngIf="searchFilter || statusFilter">
+          <mat-icon>clear</mat-icon>
+          Clear Filters
+        </button>
+      </div>
+
+      <!-- Data Table -->
+      <div *ngIf="!isLoading && !hasError && uploadHistory.length > 0" class="table-wrapper">
+        <table mat-table [dataSource]="dataSource" matSort class="upload-history-table">
+
+          <!-- Upload Date Column -->
+          <ng-container matColumnDef="uploadDate">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Upload Date</th>
+            <td mat-cell *matCellDef="let element" class="date-cell">
+              {{ formatDate(element.uploadDate) }}
+            </td>
+          </ng-container>
+
+          <!-- File Name Column -->
+          <ng-container matColumnDef="fileName">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>File Name</th>
+            <td mat-cell *matCellDef="let element" class="filename-cell">
+              <span class="file-name">
+                <mat-icon>description</mat-icon>
+                {{ element.fileName }}
+              </span>
+            </td>
+          </ng-container>
+
+          <!-- Status Column -->
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Status</th>
+            <td mat-cell *matCellDef="let element">
+              <mat-chip-set>
+                <mat-chip [color]="getStatusColor(element.status)" selected>
+                  <mat-icon matChipAvatar>{{ getStatusIcon(element.status) }}</mat-icon>
+                  {{ element.status }}
+                </mat-chip>
+              </mat-chip-set>
+            </td>
+          </ng-container>
+
+          <!-- Records Processed Column -->
+          <ng-container matColumnDef="recordsProcessed">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Processed</th>
+            <td mat-cell *matCellDef="let element">
+              <span class="metric-badge success">{{ element.recordsProcessed }}</span>
+            </td>
+          </ng-container>
+
+          <!-- Records Failed Column -->
+          <ng-container matColumnDef="recordsFailed">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Failed</th>
+            <td mat-cell *matCellDef="let element">
+              <span class="metric-badge" [ngClass]="{ 'error': element.recordsFailed > 0 }">
+                {{ element.recordsFailed }}
+              </span>
+            </td>
+          </ng-container>
+
+          <!-- Progress Column -->
+          <ng-container matColumnDef="progress">
+            <th mat-header-cell *matHeaderCellDef>Progress</th>
+            <td mat-cell *matCellDef="let element" class="progress-cell">
+              <div class="progress-container">
+                <mat-progress-bar mode="determinate" [value]="getProgressPercentage(element)"></mat-progress-bar>
+                <span class="progress-text">{{ getProgressPercentage(element) }}%</span>
+              </div>
+            </td>
+          </ng-container>
+
+          <!-- Actions Column -->
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef>Actions</th>
+            <td mat-cell *matCellDef="let element" class="actions-cell">
+              <button mat-icon-button (click)="viewTimeline(element.id)" matTooltip="View Timeline">
+                <mat-icon>timeline</mat-icon>
+              </button>
+              <button mat-icon-button
+                      *ngIf="element.status === 'FAILED'"
+                      (click)="viewError(element)"
+                      matTooltip="View Error">
+                <mat-icon color="warn">error</mat-icon>
+              </button>
+            </td>
+          </ng-container>
+
+          <!-- Table Header Row -->
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+
+          <!-- Table Data Rows -->
+          <tr mat-row *matRowDef="let row; columns: displayedColumns;"
+              [ngClass]="'status-' + row.status?.toLowerCase()"></tr>
+        </table>
+
+        <!-- Paginator -->
+        <mat-paginator [pageSizeOptions]="[10, 25, 50]" showFirstLastButtons></mat-paginator>
+      </div>
+    </mat-card-content>
+  </mat-card>
+</div>
+

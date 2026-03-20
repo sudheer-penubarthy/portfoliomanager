@@ -13,6 +13,10 @@
     <mat-icon>flag</mat-icon>
   </button>
 
+  <button mat-icon-button routerLink="/upload-history" matTooltip="Upload History">
+    <mat-icon>cloud_upload</mat-icon>
+  </button>
+
   <div *ngIf="isLoggedIn$ | async as user" [matMenuTriggerFor]="menu">
     <button mat-icon-button>
       <mat-icon>account_circle</mat-icon>

@@ -1,0 +1,52 @@
+<div class="timeline-container">
+  <mat-dialog-title>Upload Processing Timeline</mat-dialog-title>
+
+  <mat-dialog-content>
+    <!-- Loading State -->
+    <div *ngIf="isLoading" class="loading-container">
+      <mat-spinner diameter="40"></mat-spinner>
+      <p>Loading timeline...</p>
+    </div>
+
+    <!-- Error State -->
+    <div *ngIf="hasError && !isLoading" class="error-container">
+      <mat-icon class="error-icon">error_outline</mat-icon>
+      <p>{{ errorMessage }}</p>
+      <button mat-raised-button color="primary" (click)="retry()">
+        <mat-icon>refresh</mat-icon>
+        Retry
+      </button>
+    </div>
+
+    <!-- Timeline Events -->
+    <div *ngIf="!isLoading && !hasError && timelineEvents.length > 0" class="timeline">
+      <div *ngFor="let event of timelineEvents; let last = last" class="timeline-event">
+        <div class="timeline-marker" [ngClass]="'status-' + event.status?.toLowerCase()">
+          <mat-icon class="event-icon">{{ getStepIcon(event.stepName) }}</mat-icon>
+        </div>
+
+        <div class="timeline-content">
+          <h4 class="step-name">{{ event.stepName }}</h4>
+          <div class="event-time">{{ formatDate(event.timestamp) }}</div>
+          <span class="status-badge" [ngClass]="getStepColor(event.status)">
+            {{ event.status }}
+          </span>
+          <p *ngIf="event.message" class="event-message">{{ event.message }}</p>
+        </div>
+
+        <div *ngIf="!last" class="timeline-line"></div>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div *ngIf="!isLoading && !hasError && timelineEvents.length === 0" class="empty-state">
+      <mat-icon>timeline</mat-icon>
+      <p>No timeline events found</p>
+    </div>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button [mat-dialog-close]="">Close</button>
+  </mat-dialog-actions>
+</div>
+

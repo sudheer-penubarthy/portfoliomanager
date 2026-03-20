@@ -39,6 +39,11 @@ export const routes: Routes = [
     loadChildren: () => import('./features/goals/goals.routes').then(m => m.GOALS_ROUTES)
   },
   {
+    path: 'upload-history',
+    canActivate: [authGuard],
+    loadChildren: () => import('./features/uploads/upload.routes').then(m => m.UPLOAD_ROUTES)
+  },
+  {
     path: '**',
     redirectTo: 'landing'
   }

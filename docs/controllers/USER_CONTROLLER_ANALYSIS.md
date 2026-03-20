@@ -30,8 +30,9 @@ The `UserController` manages user-related operations with focus on transaction f
 ### Issue #1: **Manual Timestamp Setting on AmfiImport Entity** ❌
 
 **Location:** Line 45
+
 ```java
-var imp = com.example.portfoliotracker.entity.AmfiImport.builder()
+var imp = com.sudheer.portfoliotracker.entity.AmfiImport.builder()
         .fileName(file.getOriginalFilename())
         .sourceUrl(rtaName)
         .status(Status.PROCESSING)
@@ -45,8 +46,9 @@ var imp = com.example.portfoliotracker.entity.AmfiImport.builder()
 - Should let Hibernate handle it automatically
 
 **Should Be:**
+
 ```java
-var imp = com.example.portfoliotracker.entity.AmfiImport.builder()
+var imp = com.sudheer.portfoliotracker.entity.AmfiImport.builder()
         .fileName(file.getOriginalFilename())
         .sourceUrl(rtaName)
         .status(Status.PROCESSING)

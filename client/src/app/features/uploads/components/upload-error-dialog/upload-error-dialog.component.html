@@ -1,0 +1,42 @@
+<div class="error-dialog-container">
+  <mat-dialog-title>
+    <div class="title-content">
+      <mat-icon class="error-icon">error</mat-icon>
+      <span>Upload Processing Error</span>
+    </div>
+  </mat-dialog-title>
+
+  <mat-dialog-content>
+    <div class="error-details">
+      <div class="detail-item">
+        <span class="label">File Name:</span>
+        <span class="value">{{ data.fileName }}</span>
+      </div>
+
+      <div class="detail-item">
+        <span class="label">Records Processed:</span>
+        <span class="value success">{{ data.recordsProcessed }} / {{ data.totalRecords }}</span>
+      </div>
+
+      <div class="detail-item">
+        <span class="label">Records Failed:</span>
+        <span class="value error">{{ data.recordsFailed }}</span>
+      </div>
+
+      <div class="error-message-container">
+        <h4 class="error-message-title">Error Message:</h4>
+        <div class="error-message-box">
+          <p class="error-message-text">{{ data.errorMessage }}</p>
+          <button mat-icon-button class="copy-button" (click)="copyErrorToClipboard()" title="Copy to clipboard">
+            <mat-icon>content_copy</mat-icon>
+          </button>
+        </div>
+      </div>
+    </div>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button [mat-dialog-close]="">Close</button>
+  </mat-dialog-actions>
+</div>
+

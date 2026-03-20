@@ -1,0 +1,50 @@
+<div class="dashboard-container">
+  <mat-card class="dashboard-card total-card">
+    <mat-card-content>
+      <div class="card-content">
+        <mat-icon class="card-icon">cloud_upload</mat-icon>
+        <div class="card-info">
+          <h3 class="card-label">Total Uploads</h3>
+          <p class="card-value">{{ totalUploads }}</p>
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card class="dashboard-card processing-card">
+    <mat-card-content>
+      <div class="card-content">
+        <mat-icon class="card-icon processing">schedule</mat-icon>
+        <div class="card-info">
+          <h3 class="card-label">Processing</h3>
+          <p class="card-value">{{ processingUploads }}</p>
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card class="dashboard-card completed-card">
+    <mat-card-content>
+      <div class="card-content">
+        <mat-icon class="card-icon completed">check_circle</mat-icon>
+        <div class="card-info">
+          <h3 class="card-label">Completed</h3>
+          <p class="card-value">{{ completedUploads }}</p>
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card class="dashboard-card failed-card">
+    <mat-card-content>
+      <div class="card-content">
+        <mat-icon class="card-icon failed">cancel</mat-icon>
+        <div class="card-info">
+          <h3 class="card-label">Failed</h3>
+          <p class="card-value">{{ failedUploads }}</p>
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+</div>
+
