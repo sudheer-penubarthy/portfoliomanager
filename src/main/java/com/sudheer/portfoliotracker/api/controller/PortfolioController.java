@@ -1,6 +1,7 @@
 package com.sudheer.portfoliotracker.api.controller;
 
 import com.sudheer.portfoliotracker.api.dto.PortfolioSummaryDto;
+import com.sudheer.portfoliotracker.api.dto.HoldingDto;
 import com.sudheer.portfoliotracker.api.dto.TransactionDetailsDto;
 import com.sudheer.portfoliotracker.infrastructure.persistence.entity.PortfolioUser;
 import com.sudheer.portfoliotracker.repository.PortfolioUserRepository;
@@ -89,6 +90,22 @@ public class PortfolioController {
         log.debug("Fetching holdings by fund for user: {}", userId);
 
         Map<String, java.math.BigDecimal> holdings = portfolioService.getHoldingsByFund(userId);
+        return ResponseEntity.ok(holdings);
+    }
+
+    /**
+     * Get detailed holdings with invested and current values.
+     *
+     * @param userId the user ID
+     * @return 200 OK with detailed holdings list
+     */
+    @GetMapping("/holdings/details")
+    public ResponseEntity<List<HoldingDto>> getHoldingDetails(
+            @RequestParam Long userId,
+            @RequestParam(defaultValue = "false") boolean includeInactive) {
+        log.debug("Fetching holding details for user: {} (includeInactive={})", userId, includeInactive);
+
+        List<HoldingDto> holdings = portfolioService.getHoldingDetails(userId, includeInactive);
         return ResponseEntity.ok(holdings);
     }
 }

@@ -1,7 +1,7 @@
 <div class="container" *ngIf="!loading; else loadingTemplate">
   <div class="header">
     <button mat-icon-button (click)="goBack()">
-      <mat-icon>arrow_back</mat-icon>
+      <mat-icon>{{ isDialogMode ? 'close' : 'arrow_back' }}</mat-icon>
     </button>
     <h1 class="page-title">Fund Transactions</h1>
   </div>
@@ -12,11 +12,30 @@
 
   <mat-card>
     <mat-card-header>
-      <mat-card-title>{{ schemeCode }}</mat-card-title>
+      <mat-card-title>{{ schemeName }}</mat-card-title>
       <mat-card-subtitle>Transaction History</mat-card-subtitle>
     </mat-card-header>
 
     <mat-card-content>
+      <div class="summary-strip" *ngIf="transactions.length > 0">
+        <div class="summary-item">
+          <span class="summary-label">Net Units</span>
+          <span class="summary-value">{{ netUnits | number:'1.3-3' }}</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Net Invested</span>
+          <span class="summary-value">{{ netAmount | currency:'INR' }}</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Buys</span>
+          <span class="summary-value">{{ buyCount }}</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Sells</span>
+          <span class="summary-value">{{ sellCount }}</span>
+        </div>
+      </div>
+
       <table mat-table [dataSource]="transactions" class="transactions-table">
         <!-- Transaction Date Column -->
         <ng-container matColumnDef="txnDate">
@@ -46,6 +65,11 @@
         <ng-container matColumnDef="pricePerUnit">
           <th mat-header-cell *matHeaderCellDef>Price/Unit</th>
           <td mat-cell *matCellDef="let element">{{ element.pricePerUnit | currency:'INR' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="remarks">
+          <th mat-header-cell *matHeaderCellDef>Remarks</th>
+          <td mat-cell *matCellDef="let element">{{ element.remarks || '-' }}</td>
         </ng-container>
 
         <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>

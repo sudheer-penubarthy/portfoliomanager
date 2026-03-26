@@ -3,6 +3,7 @@ package com.sudheer.portfoliotracker.api.dto;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 @Getter
 @Setter
@@ -19,6 +20,12 @@ public class PortfolioSummaryDto {
     private BigDecimal totalGain;
     private Double gainPercentage;
     private Double xirr;
+    private LocalDate latestNavDate;
+    private LocalDate latestSnapshotDate;
+    private BigDecimal latestSnapshotValue;
+    private BigDecimal valuationDiscrepancyAmount;
+    private Double valuationDiscrepancyPercentage;
+    private Boolean hasValuationDiscrepancy;
 
     private Integer totalFunds;
     private Integer totalHoldings;

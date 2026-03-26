@@ -49,13 +49,214 @@
       </mat-card>
     </div>
 
+    <div class="portfolio-actions">
+      <button mat-raised-button color="primary" (click)="syncAmfi()" [disabled]="syncingAmfi">
+        <mat-icon>sync</mat-icon>
+        {{ syncingAmfi ? 'Syncing AMFI...' : 'Run AMFI Sync' }}
+      </button>
+      <p class="sync-message" *ngIf="syncMessage">{{ syncMessage }}</p>
+    </div>
+
+    <div class="nav-status" [ngClass]="{ 'nav-status-warning': !portfolio.latestNavDate }">
+      {{ navStatusMessage }}
+    </div>
+
+    <div class="nav-status valuation-status"
+         *ngIf="valuationComparisonMessage"
+         [ngClass]="{ 'nav-status-warning': portfolio.hasValuationDiscrepancy }">
+      {{ valuationComparisonMessage }}
+    </div>
+
     <mat-card class="holdings-card">
       <mat-card-header>
         <mat-card-title>Holdings Summary</mat-card-title>
       </mat-card-header>
       <mat-card-content>
-        <p>Total Funds: {{ portfolio.totalFunds }}</p>
+        <p>Total Funds: {{ showAllFunds ? holdings.length : portfolio.totalFunds }}</p>
         <p>Active Holdings: {{ portfolio.totalHoldings }}</p>
+        <mat-slide-toggle [checked]="showAllFunds" (change)="onShowAllFundsChange($event.checked)">
+          Show closed funds too
+        </mat-slide-toggle>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="funds-card" *ngIf="reconciliationRows.length > 0">
+      <mat-card-header>
+        <mat-card-title>Valuation Reconciliation</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <table mat-table [dataSource]="reconciliationRows" class="funds-table reconciliation-table">
+          <ng-container matColumnDef="scheme">
+            <th mat-header-cell *matHeaderCellDef>Fund</th>
+            <td mat-cell *matCellDef="let element">
+              <div class="fund-name">{{ element.schemeName }}</div>
+              <div class="fund-meta">{{ element.schemeCode }}</div>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="amfiValue">
+            <th mat-header-cell *matHeaderCellDef>AMFI Value</th>
+            <td mat-cell *matCellDef="let element">{{ element.currentValue | currency:'INR' }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="snapshotValue">
+            <th mat-header-cell *matHeaderCellDef>Uploaded Snapshot</th>
+            <td mat-cell *matCellDef="let element">
+              <div>{{ element.snapshotCurrentValue | currency:'INR' }}</div>
+              <div class="nav-meta">{{ formatNavDate(element.snapshotNavDate) }}</div>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="difference">
+            <th mat-header-cell *matHeaderCellDef>Difference</th>
+            <td mat-cell *matCellDef="let element">
+              <span [ngClass]="getGainClass(element.valuationDiscrepancyAmount || 0)">
+                {{ element.valuationDiscrepancyAmount | currency:'INR' }}
+              </span>
+              <div class="nav-meta">{{ element.valuationDiscrepancyPercentage | number:'1.2-2' }}%</div>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="['scheme', 'amfiValue', 'snapshotValue', 'difference']"></tr>
+          <tr mat-row *matRowDef="let row; columns: ['scheme', 'amfiValue', 'snapshotValue', 'difference'];"></tr>
+        </table>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="funds-card" *ngIf="holdings.length > 0">
+      <mat-card-header>
+        <mat-card-title>Fund Breakdown</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <div class="filters-bar">
+          <mat-form-field appearance="outline">
+            <mat-label>Type</mat-label>
+            <mat-select [(value)]="typeFilter">
+              <mat-option value="ALL">All</mat-option>
+              <mat-option *ngFor="let type of availableTypes" [value]="type">{{ type }}</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Profit/Loss</mat-label>
+            <mat-select [(value)]="performanceFilter">
+              <mat-option value="ALL">All</mat-option>
+              <mat-option value="PROFIT">Profit</mat-option>
+              <mat-option value="LOSS">Loss</mat-option>
+              <mat-option value="FLAT">Flat</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Goal</mat-label>
+            <mat-select [(value)]="goalFilter">
+              <mat-option value="ALL">All</mat-option>
+              <mat-option value="UNASSIGNED">Unassigned</mat-option>
+              <mat-option *ngFor="let goal of availableGoals" [value]="goal">{{ goal }}</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Group By</mat-label>
+            <mat-select [(value)]="groupBy">
+              <mat-option value="NONE">None</mat-option>
+              <mat-option value="TYPE">Type</mat-option>
+              <mat-option value="PROFIT_LOSS">Profit/Loss</mat-option>
+              <mat-option value="GOAL">Goal</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Sort By</mat-label>
+            <mat-select [(value)]="sortBy">
+              <mat-option value="CURRENT_VALUE">Current Value</mat-option>
+              <mat-option value="INVESTED">Invested</mat-option>
+              <mat-option value="PNL">Profit/Loss</mat-option>
+              <mat-option value="XIRR">XIRR</mat-option>
+              <mat-option value="NAME">Name</mat-option>
+            </mat-select>
+          </mat-form-field>
+        </div>
+
+        <div *ngFor="let group of holdingGroups" class="holding-group">
+          <h3 class="group-title" *ngIf="groupBy !== 'NONE'">{{ group.label }}</h3>
+
+          <table mat-table [dataSource]="group.items" class="funds-table">
+            <ng-container matColumnDef="schemeName">
+              <th mat-header-cell *matHeaderCellDef>Fund</th>
+              <td mat-cell *matCellDef="let element">
+                <div class="fund-name">{{ element.schemeName }}</div>
+                <div class="fund-meta">{{ element.schemeCode }} - {{ element.schemeType }}</div>
+                <div class="fund-meta" *ngIf="element.active === false">Closed / inactive fund</div>
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="units">
+              <th mat-header-cell *matHeaderCellDef>Units</th>
+              <td mat-cell *matCellDef="let element">{{ element.units | number:'1.3-3' }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="totalCost">
+              <th mat-header-cell *matHeaderCellDef>Invested</th>
+              <td mat-cell *matCellDef="let element">{{ element.totalCost | currency:'INR' }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="latestNav">
+              <th mat-header-cell *matHeaderCellDef>Current NAV</th>
+              <td mat-cell *matCellDef="let element">
+                <div>{{ element.latestNav | number:'1.2-4' }}</div>
+                <div class="nav-meta">{{ formatNavDate(element.latestNavDate) }}</div>
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="currentValue">
+              <th mat-header-cell *matHeaderCellDef>Current Value</th>
+              <td mat-cell *matCellDef="let element">{{ element.currentValue | currency:'INR' }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="pnl">
+              <th mat-header-cell *matHeaderCellDef>Gain/Loss</th>
+              <td mat-cell *matCellDef="let element">
+                <span [ngClass]="getGainClass(element.pnl)">
+                  {{ element.pnl | currency:'INR' }}
+                </span>
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="xirr">
+              <th mat-header-cell *matHeaderCellDef>XIRR</th>
+              <td mat-cell *matCellDef="let element">
+                <span [ngClass]="getGainClass(element.xirr)">
+                  {{ element.xirr | number:'1.2-2' }}%
+                </span>
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="goalNames">
+              <th mat-header-cell *matHeaderCellDef>Goals</th>
+              <td mat-cell *matCellDef="let element">
+                <mat-chip-set>
+                  <mat-chip>{{ formatGoals(element.goalNames) }}</mat-chip>
+                  <mat-chip *ngIf="element.hasValuationDiscrepancy" class="discrepancy-chip">
+                    Snapshot diff {{ element.valuationDiscrepancyAmount | currency:'INR' }}
+                  </mat-chip>
+                </mat-chip-set>
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="actions">
+              <th mat-header-cell *matHeaderCellDef></th>
+              <td mat-cell *matCellDef="let element">
+                <button mat-stroked-button color="primary" (click)="viewFund(element)">
+                  View Transactions
+                </button>
+              </td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+          </table>
+        </div>
       </mat-card-content>
     </mat-card>
   </div>
@@ -67,4 +268,3 @@
     <p>Loading portfolio data...</p>
   </div>
 </ng-template>
-

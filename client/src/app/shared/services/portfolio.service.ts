@@ -11,6 +11,12 @@ export interface PortfolioSummary {
   totalGain: number;
   gainPercentage: number;
   xirr: number;
+  latestNavDate?: string | null;
+  latestSnapshotDate?: string | null;
+  latestSnapshotValue?: number | null;
+  valuationDiscrepancyAmount?: number | null;
+  valuationDiscrepancyPercentage?: number | null;
+  hasValuationDiscrepancy?: boolean | null;
   totalFunds: number;
   totalHoldings: number;
 }
@@ -25,6 +31,27 @@ export interface TransactionDetails {
   amount: number;
   pricePerUnit: number;
   remarks?: string;
+}
+
+export interface HoldingDetails {
+  schemeCode: string;
+  schemeName: string;
+  schemeType: string;
+  units: number;
+  latestNav: number;
+  latestNavDate?: string | null;
+  avgCost: number;
+  totalCost: number;
+  currentValue: number;
+  snapshotCurrentValue?: number | null;
+  snapshotNavDate?: string | null;
+  valuationDiscrepancyAmount?: number | null;
+  valuationDiscrepancyPercentage?: number | null;
+  hasValuationDiscrepancy?: boolean | null;
+  active?: boolean | null;
+  pnl: number;
+  xirr: number;
+  goalNames: string[];
 }
 
 @Injectable({
@@ -52,6 +79,15 @@ export class PortfolioService {
 
   getHoldings(userId: number): Observable<{ [key: string]: number }> {
     return this.http.get<{ [key: string]: number }>(`${this.apiUrl}/holdings`, { params: { userId: userId.toString() } });
+  }
+
+  getHoldingDetails(userId: number, includeInactive = false): Observable<HoldingDetails[]> {
+    return this.http.get<HoldingDetails[]>(`${this.apiUrl}/holdings/details`, {
+      params: {
+        userId: userId.toString(),
+        includeInactive: includeInactive.toString()
+      }
+    });
   }
 }
 

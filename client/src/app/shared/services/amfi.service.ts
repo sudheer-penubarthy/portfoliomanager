@@ -23,6 +23,7 @@ export interface AmfiNav {
 })
 export class AmfiService {
   private apiUrl = '/api/amfi';
+  private syncApiUrl = '/api/v1/amfi/sync';
 
   constructor(private http: HttpClient) {}
 
@@ -36,6 +37,10 @@ export class AmfiService {
 
   getNav(schemeCode: string, date: string): Observable<AmfiNav> {
     return this.http.get<AmfiNav>(`${this.apiUrl}/nav/${schemeCode}`, { params: { date } });
+  }
+
+  syncDailyNav(): Observable<string> {
+    return this.http.post(`${this.syncApiUrl}/daily`, null, { responseType: 'text' });
   }
 }
 

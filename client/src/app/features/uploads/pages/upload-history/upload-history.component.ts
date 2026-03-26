@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ViewChild, AfterViewInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, AfterViewInit, ChangeDetectorRef, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
@@ -67,15 +67,29 @@ export class UploadHistoryComponent implements OnInit, AfterViewInit, OnDestroy 
     'actions'
   ];
 
-  @ViewChild(MatPaginator) paginator!: MatPaginator;
-  @ViewChild(MatSort) sort!: MatSort;
+  private paginatorRef?: MatPaginator;
+  private sortRef?: MatSort;
+
+  @ViewChild(MatPaginator)
+  set paginator(value: MatPaginator | undefined) {
+    this.paginatorRef = value;
+    this.bindTableControls();
+  }
+
+  @ViewChild(MatSort)
+  set sort(value: MatSort | undefined) {
+    this.sortRef = value;
+    this.bindTableControls();
+  }
 
   private destroy$ = new Subject<void>();
   private statusPoll$ = new Subject<number>();
 
   constructor(
     private uploadService: UploadService,
-    private dialog: MatDialog
+    private dialog: MatDialog,
+    private changeDetectorRef: ChangeDetectorRef,
+    private ngZone: NgZone
   ) {}
 
   ngOnInit(): void {
@@ -84,8 +98,7 @@ export class UploadHistoryComponent implements OnInit, AfterViewInit, OnDestroy 
   }
 
   ngAfterViewInit(): void {
-    this.dataSource.paginator = this.paginator;
-    this.dataSource.sort = this.sort;
+    this.bindTableControls();
   }
 
   ngOnDestroy(): void {
@@ -138,16 +151,23 @@ export class UploadHistoryComponent implements OnInit, AfterViewInit, OnDestroy 
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (data) => {
-          this.uploadHistory = data;
-          this.dataSource.data = data;
-          this.isLoading = false;
-          this.applyFilters();
+          this.ngZone.run(() => {
+            this.uploadHistory = data;
+            this.dataSource.data = data;
+            this.isLoading = false;
+            this.applyFilters();
+            this.bindTableControls();
+            this.changeDetectorRef.detectChanges();
+          });
         },
         error: (error) => {
-          console.error('Error loading upload history:', error);
-          this.hasError = true;
-          this.errorMessage = error.error?.message || 'Failed to load upload history';
-          this.isLoading = false;
+          this.ngZone.run(() => {
+            console.error('Error loading upload history:', error);
+            this.hasError = true;
+            this.errorMessage = error.error?.message || 'Failed to load upload history';
+            this.isLoading = false;
+            this.changeDetectorRef.detectChanges();
+          });
         }
       });
   }
@@ -195,6 +215,8 @@ export class UploadHistoryComponent implements OnInit, AfterViewInit, OnDestroy 
       this.uploadHistory[index].errorMessage = status.errorMessage;
       this.uploadHistory[index].status = status.status as any;
       this.dataSource.data = [...this.uploadHistory];
+      this.bindTableControls();
+      this.changeDetectorRef.detectChanges();
     }
   }
 
@@ -220,6 +242,17 @@ export class UploadHistoryComponent implements OnInit, AfterViewInit, OnDestroy 
     }
 
     this.dataSource.data = filteredData;
+    this.bindTableControls();
+  }
+
+  private bindTableControls(): void {
+    if (this.paginatorRef) {
+      this.dataSource.paginator = this.paginatorRef;
+    }
+
+    if (this.sortRef) {
+      this.dataSource.sort = this.sortRef;
+    }
   }
 
   /**

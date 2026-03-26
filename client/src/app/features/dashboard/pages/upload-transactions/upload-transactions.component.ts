@@ -45,6 +45,7 @@ export class UploadTransactionsComponent implements OnInit {
   currentUserEmail: string | null = null;
   transactionFile: File | null = null;
   valuationFile: File | null = null;
+  pdfFile: File | null = null;
   zipFile: File | null = null;
 
   rtaOptions = [
@@ -59,6 +60,7 @@ export class UploadTransactionsComponent implements OnInit {
       email: ['', [Validators.required, Validators.email]],
       rtaName: ['', Validators.required],
       isValuationFile: [false],
+      pdfPassword: [''],
       zipPassword: ['']
     });
   }
@@ -98,6 +100,13 @@ export class UploadTransactionsComponent implements OnInit {
     }
   }
 
+  onPdfFileSelected(event: any): void {
+    const file = event.target.files?.[0];
+    if (file) {
+      this.pdfFile = file;
+    }
+  }
+
   onSubmit(): void {
     this.submitted = true;
     this.error = null;
@@ -108,8 +117,8 @@ export class UploadTransactionsComponent implements OnInit {
     }
 
     // Validate at least one file is selected
-    if (!this.transactionFile && !this.valuationFile && !this.zipFile) {
-      this.error = 'Please select at least one file (transaction, valuation, or ZIP)';
+    if (!this.transactionFile && !this.valuationFile && !this.pdfFile && !this.zipFile) {
+      this.error = 'Please select at least one file (transaction, valuation, PDF statement, or ZIP)';
       return;
     }
 
@@ -133,6 +142,14 @@ export class UploadTransactionsComponent implements OnInit {
 
     if (this.valuationFile) {
       formData.append('valuationFile', this.valuationFile);
+    }
+
+    if (this.pdfFile) {
+      formData.append('pdfFile', this.pdfFile);
+      const pdfPassword = this.form.get('pdfPassword')?.value;
+      if (pdfPassword) {
+        formData.append('pdfPassword', pdfPassword);
+      }
     }
 
     if (this.zipFile) {
@@ -162,6 +179,7 @@ export class UploadTransactionsComponent implements OnInit {
     this.form.reset();
     this.transactionFile = null;
     this.valuationFile = null;
+    this.pdfFile = null;
     this.zipFile = null;
     this.submitted = false;
 
@@ -175,11 +193,13 @@ export class UploadTransactionsComponent implements OnInit {
     return file ? file.name : 'No file selected';
   }
 
-  clearFile(fileType: 'transaction' | 'valuation' | 'zip'): void {
+  clearFile(fileType: 'transaction' | 'valuation' | 'pdf' | 'zip'): void {
     if (fileType === 'transaction') {
       this.transactionFile = null;
     } else if (fileType === 'valuation') {
       this.valuationFile = null;
+    } else if (fileType === 'pdf') {
+      this.pdfFile = null;
     } else if (fileType === 'zip') {
       this.zipFile = null;
     }

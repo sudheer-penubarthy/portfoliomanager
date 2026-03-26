@@ -90,6 +90,32 @@
             </button>
           </div>
 
+          <!-- PDF Statement -->
+          <div class="file-input-group">
+            <label class="file-label">
+              <span class="label-text">CAMS PDF Statement (Optional)</span>
+              <span class="file-name">{{ getFileDisplayName(pdfFile) }}</span>
+              <input type="file"
+                     (change)="onPdfFileSelected($event)"
+                     accept=".pdf"
+                     style="display: none;">
+            </label>
+            <button *ngIf="pdfFile"
+                    type="button"
+                    class="clear-button"
+                    (click)="clearFile('pdf')">
+              Clear
+            </button>
+          </div>
+
+          <mat-form-field appearance="outline" class="full-width" *ngIf="pdfFile">
+            <mat-label>PDF Password</mat-label>
+            <input matInput
+                   formControlName="pdfPassword"
+                   type="password"
+                   placeholder="Enter the CAMS PDF password">
+          </mat-form-field>
+
           <!-- ZIP File -->
           <div class="file-input-group">
             <label class="file-label">
@@ -140,9 +166,10 @@
           <h4>Requirements:</h4>
           <ul>
             <li>Your email must be included in the uploaded files</li>
-            <li>Upload at least one file (transaction, valuation, or ZIP)</li>
+            <li>Upload at least one file (transaction, valuation, CAMS PDF statement, or ZIP)</li>
             <li>Select your fund house/RTA name</li>
             <li>If using a ZIP file, include transaction and/or valuation files inside</li>
+            <li>If using a CAMS PDF statement, provide the PDF password</li>
             <li>All file contents must contain your registered email address</li>
           </ul>
         </div>

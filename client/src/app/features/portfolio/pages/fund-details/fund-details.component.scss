@@ -2,6 +2,7 @@
   display: flex;
   align-items: center;
   margin-bottom: 20px;
+  justify-content: space-between;
 
   button {
     margin-right: 10px;
@@ -9,11 +10,46 @@
 
   .page-title {
     margin: 0;
+    flex: 1;
   }
+}
+
+mat-card {
+  background: #fff;
+}
+
+.summary-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.summary-item {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.summary-label {
+  display: block;
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.summary-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
 }
 
 .transactions-table {
   width: 100%;
+  table-layout: fixed;
 
   th {
     font-weight: 600;
@@ -23,6 +59,7 @@
 
   td {
     padding: 12px;
+    word-break: break-word;
   }
 
   tr:hover {

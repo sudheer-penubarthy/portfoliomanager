@@ -48,10 +48,12 @@ amfi:
     cron: "0 30 20 * * ?"
   nav:
     url: https://portal.amfiindia.com/spages/NAVAll.txt
+    fallback-url: https://www.amfiindia.com/spages/NAVAll.txt
     cron: 0 15 5 * * ?        # example: daily at 05:15 server time (adjust as needed)
     connection-timeout-ms: 20000
     read-timeout-ms: 60000
     user-agent: Investment-Tracker/1.0
+    allow-insecure-ssl-fallback: true
 
 external:
   api:
@@ -62,7 +64,7 @@ external:
 
 # Logging & server
 server:
-  port: 8081
+  port: 8080
 
 logging:
   level:

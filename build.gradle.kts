@@ -27,6 +27,8 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.1.0")
     implementation("org.springframework.boot:spring-boot-starter-validation")
+    implementation("net.lingala.zip4j:zip4j:2.11.5")
+    implementation("org.apache.pdfbox:pdfbox:2.0.31")
 
     // JWT Token Support
     implementation("io.jsonwebtoken:jjwt-api:0.12.3")

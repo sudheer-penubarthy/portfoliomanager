@@ -1,3 +1,5 @@
+@import '@angular/material/prebuilt-themes/azure-blue.css';
+
 /* ============================= */
 /* Theme Definitions             */
 /* ============================= */
@@ -176,4 +178,39 @@ button mat-icon {
 /* Ensure icons inherit color from theme */
 mat-icon:not([color]) {
   color: currentColor;
+}
+
+/* ============================= */
+/* Angular Material globals      */
+/* ============================= */
+
+.mat-mdc-form-field {
+  width: 100%;
+}
+
+.cdk-overlay-pane .mat-mdc-select-panel,
+.cdk-overlay-pane .mat-mdc-menu-panel,
+.cdk-overlay-pane .mat-mdc-autocomplete-panel {
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+}
+
+.cdk-overlay-container,
+.cdk-global-overlay-wrapper {
+  z-index: 2000 !important;
+}
+
+.cdk-overlay-pane {
+  z-index: 2001 !important;
+}
+
+.mat-mdc-option {
+  background: transparent;
+}
+
+.mat-mdc-option:hover:not(.mdc-list-item--disabled),
+.mat-mdc-option.mdc-list-item--selected:not(.mdc-list-item--disabled) {
+  background: rgba(31, 58, 95, 0.08);
 }
