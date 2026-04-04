@@ -13,14 +13,22 @@ Portfolio Manager is a full-stack investment tracking application built with:
 
 ### Layered Architecture
 
-The backend follows **clean architecture** with distinct layers:
+The backend follows **clean architecture** with distinct layers using **Use Case pattern**:
 
 ```
-API Layer → Service Layer → Repository Layer → Database (with Flyway migrations)
-  (Controllers)  (Business Logic)   (Data Access)
+API Layer → Use Case Layer → Domain Service Layer → Repository Layer → Database (with Flyway migrations)
+  (Controllers)  (Business logic    (Persistence,       (Data Access)
+               orchestration)   cross-cutting logic)
 ```
+
+**Key Pattern**: 
+- **Use Cases** (`application/usecase/impl/`) implement interfaces from `application/usecase/` and coordinate the application flow
+- **Domain Services** (`domain/service/impl/`) handle persistence logic and complex domain operations
+- Both layers collaborate: Use Cases call Domain Services to accomplish business goals
 
 **Critical Detail**: Flyway manages ALL schema migrations. `application.yml` sets `hibernate.ddl-auto: none` to prevent Hibernate from trying to create tables. **Never** let Hibernate auto-create schema—always create Flyway SQL migrations (e.g., `src/main/resources/db/migration/V4__Add_New_Table.sql`).
+
+**Scheduling**: `@EnableScheduling` is configured in `infrastructure/config/SchedulingConfig.java` (not in main application class). Scheduled methods use `@Scheduled(cron = "...")` annotation.
 
 ### Package Structure
 
@@ -31,18 +39,30 @@ src/main/java/com/sudheer/portfoliotracker/
 │   └── dto/                 # Data Transfer Objects (API contracts)
 ├── application/
 │   ├── mapper/              # MapStruct entities ↔ DTOs (auto-generated)
-│   └── service/impl/        # Specific service implementations
+│   ├── usecase/             # Use case interfaces (business operations)
+│   │   └── impl/            # Use case implementations (core business logic flow)
+│   ├── command/             # (Reserved for command/write operations - currently empty)
+│   └── query/               # (Reserved for query/read operations - currently empty)
 ├── domain/
 │   ├── model/               # JPA entities (@Entity) - where Hibernate persists
 │   ├── policy/              # Business rules/policies
 │   ├── port/                # Repository interfaces (Spring Data JPA)
-│   └── service/             # Domain services (core business logic)
+│   └── service/             # Domain services (persistence logic, cross-cutting concerns)
+│       └── impl/            # Domain service implementations (e.g., AmfiPersistServiceImpl)
 ├── config/                  # Spring configuration (@Configuration)
 ├── exception/               # Custom exceptions
-├── infrastructure/          # External integrations (API clients, file parsing)
-├── jobs/                    # Scheduled tasks (@Scheduled)
+├── infrastructure/          # External integrations (API clients, file parsing, persistence)
+│   ├── amfi/                # AMFI data ingestion (client, parser, hash calculation)
+│   ├── file/                # File upload/parsing (audit, normalizer, parser, upload, validation)
+│   ├── persistence/         # Persistence support (audit tracking)
+│   ├── scheduler/           # Scheduler support (or see separate config/)
+│   └── config/              # Infrastructure config (e.g., SchedulingConfig with @EnableScheduling)
+├── jobs/                    # Scheduled task coordinators (@Component, @Scheduled methods commented/moved to config)
+├── repository/              # Repository implementations (Spring Data JPA auto-generated)
+├── service/                 # (Legacy location - may contain older service definitions)
 ├── util/                    # Helper utilities
-└── PortfolioTrackerApplication.java  # Main Spring Boot entry point
+├── enums/                   # Enums and constants
+└── PortfolioTrackerApplication.java  # Main Spring Boot entry point (@SpringBootApplication only)
 ```
 
 ### Data Flow Example: Uploading Transactions
@@ -181,8 +201,8 @@ flyway:
 ```yaml
 jwt:
   secret: ${JWT_SECRET:...}
-  access-token-expiration: 1800000    # 30 minutes
-  refresh-token-expiration: 604800000  # 7 days
+  access-token-expiration: 1800000    # 30 minutes in milliseconds
+  refresh-token-expiration: 604800000  # 7 days in milliseconds
 ```
 
 **AMFI Scheduled Jobs**:
@@ -192,7 +212,11 @@ amfi:
     cron: "0 30 20 * * ?"  # Daily at 8:30 PM UTC
   nav:
     url: https://portal.amfiindia.com/spages/NAVAll.txt
+    fallback-url: https://www.amfiindia.com/spages/NAVAll.txt
     connection-timeout-ms: 20000
+    read-timeout-ms: 60000
+    user-agent: Investment-Tracker/1.0
+    allow-insecure-ssl-fallback: true
 ```
 
 ---
@@ -234,26 +258,37 @@ amfi:
    }
    ```
 
-4. **Create Service** (`src/main/java/.../domain/service/MyService.java`):
+4. **Create Use Case Interface** (`src/main/java/.../application/usecase/MyUseCase.java`):
    ```java
-   @Service
-   @RequiredArgsConstructor  // Lombok: constructor injection
-   public class MyService {
+   public interface MyUseCase {
+       MyResponseDto execute(Long userId, MyRequestDto request);
+   }
+   ```
+
+5. **Create Use Case Implementation** (`src/main/java/.../application/usecase/impl/MyUseCaseImpl.java`):
+   ```java
+   @Component
+   @RequiredArgsConstructor
+   public class MyUseCaseImpl implements MyUseCase {
        private final MyRepository myRepository;
+       private final MyDomainService myDomainService;
        
-       public MyEntity save(MyEntity entity) {
-           return myRepository.save(entity);
+       @Override
+       public MyResponseDto execute(Long userId, MyRequestDto request) {
+           // Orchestrate use case flow
+           MyEntity entity = myDomainService.createEntity(userId, request);
+           return new MyResponseDto(entity.getId());
        }
    }
    ```
 
-5. **Create/Update Controller** (`src/main/java/.../api/controller/MyController.java`):
+6. **Create/Update Controller** (`src/main/java/.../api/controller/MyController.java`):
    ```java
    @RestController
    @RequestMapping("/api/my-resource")
    @RequiredArgsConstructor
    public class MyController {
-       private final MyService myService;
+       private final MyUseCase myUseCase;
        private final JwtTokenService jwtTokenService;
        
        @PostMapping
@@ -261,12 +296,37 @@ amfi:
                @RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader,
                @RequestBody MyRequestDto request) {
            Long userId = jwtTokenService.extractUserId(authHeader.replace("Bearer ", ""));
-           // ... use userId to isolate data
+           MyResponseDto response = myUseCase.execute(userId, request);
+           return ResponseEntity.status(201).body(response);
        }
    }
    ```
 
-6. **Create Flyway Migration** (`src/main/resources/db/migration/V<X>__Description.sql`):
+7. **Create Domain Service** (if needed) (`src/main/java/.../domain/service/MyDomainService.java`):
+   ```java
+   public interface MyDomainService {
+       MyEntity createEntity(Long userId, MyRequestDto request);
+   }
+   ```
+   
+   And implementation (`domain/service/impl/MyDomainServiceImpl.java`):
+   ```java
+   @Service
+   @RequiredArgsConstructor
+   public class MyDomainServiceImpl implements MyDomainService {
+       private final MyRepository myRepository;
+       
+       @Override
+       public MyEntity createEntity(Long userId, MyRequestDto request) {
+           MyEntity entity = new MyEntity();
+           entity.setUserId(userId);
+           entity.setField(request.getField());
+           return myRepository.save(entity);
+       }
+   }
+   ```
+
+8. **Create Flyway Migration** (`src/main/resources/db/migration/V<X>__Description.sql`):
    ```sql
    CREATE TABLE IF NOT EXISTS my_entities (
        id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -281,10 +341,13 @@ amfi:
 
 ### Testing Patterns
 
-- **Unit Tests**: Mock repositories & services; test business logic in isolation
+- **Unit Tests**: Mock repositories, services, and use cases; test business logic in isolation
+  - Example: `AmfiSyncControllerTest` mocks `SyncAmfiDataUseCase` to test controller behavior
+- **Use Case Tests**: Mock domain services and infrastructure dependencies; test orchestration flow
+  - Example: `SyncAmfiDataUseCaseImpl` coordinates between `AmfiClient`, `AmfiParser`, and `AmfiPersistService`
 - **Integration Tests**: Use `@SpringBootTest` with test database (H2 or test MySQL)
 - **Test Name Convention**: `*Test.java` → auto-discovered by Gradle `test` task
-- **Code Coverage**: JaCoCo configured; run `./gradlew jacocoTestReport` to see coverage
+- **Code Coverage**: JaCoCo configured; run `./gradlew.bat jacocoTestReport` to see coverage
 
 ---
 
@@ -350,11 +413,12 @@ export class MyFeatureComponent implements OnInit {
 
 ### AMFI Mutual Fund Data Ingestion
 
-- **Service**: `AmfiIngestService` + `AmfiParser`
+- **Use Case**: `SyncAmfiDataUseCase` (interface) + `SyncAmfiDataUseCaseImpl` (implementation)
 - **Source**: https://portal.amfiindia.com/spages/NAVAll.txt (text file)
 - **Trigger**: Scheduled job (cron) OR manual `POST /api/amfi/sync`
 - **Pattern**: Download → Parse CSV-like format → Persist to `amfi_schemes` + `amfi_navs` tables
 - **Key Method**: `fetchAndIngest()` runs transactionally; idempotent (updates existing)
+- **Infrastructure**: Uses `AmfiClient`, `AmfiParser`, `AmfiPayloadHasher`, `AmfiPersistService`, and `AmfiSyncAuditService`
 
 ### File Upload Parsing
 
@@ -391,7 +455,18 @@ Controller extracts from `@RequestHeader(HttpHeaders.AUTHORIZATION)` using `jwtT
 - Never modify executed migration files
 
 ### 7. **Scheduled Jobs Need @EnableScheduling**
-Main class has `@SpringBootApplication` (already includes scheduling); use `@Scheduled(cron = "...")` on service methods.
+`@EnableScheduling` is configured in `infrastructure/config/SchedulingConfig.java` (separate configuration class, not in main application class). Scheduled methods are defined in job coordinators (e.g., `jobs/AmfiNavScheduler.java`) using `@Scheduled(cron = "...")` annotation. Note: methods are typically commented out by default; uncomment to enable. The method should call the corresponding use case (e.g., `syncUseCase.runDaily()`). Example: 
+```java
+@Component
+public class AmfiNavScheduler {
+    private final SyncAmfiDataUseCase syncUseCase;
+    
+    // @Scheduled(cron = "0 30 6 * * ?")  // Uncomment to enable
+    public void runDaily() throws Exception {
+        syncUseCase.runDaily();
+    }
+}
+```
 
 ### 8. **Test Database Separate from Dev**
 - Dev: MySQL (requires local setup + env vars)
@@ -409,7 +484,7 @@ Main class has `@SpringBootApplication` (already includes scheduling); use `@Sch
 - `500 Internal Server Error` - Unexpected error
 
 ### 10. **Cross-Module Communication Pattern**
-Services call other services (not controllers). Controllers are thin wrappers around services. Example: `TransactionIngestService` calls `AmfiService` to look up fund codes.
+Use Cases orchestrate Domain Services (not services calling services). Controllers are thin wrappers around Use Cases. Example: `SyncAmfiDataUseCaseImpl` calls `AmfiClient`, `AmfiParser`, and `AmfiPersistService` to coordinate the sync operation.
 
 ---
 
@@ -432,9 +507,11 @@ Services call other services (not controllers). Controllers are thin wrappers ar
 
 ### Backend
 1. Create DTO: `PortfolioExportDto` (in `api/dto/`)
-2. Add service method: `PortfolioService.exportPortfolioAsCSV(Long userId): String`
-3. Add controller endpoint: `@GetMapping("/export")` returns `ResponseEntity<byte[]>` with CSV content-type
-4. No DB change needed (reads from existing entities)
+2. Create Use Case Interface: `ExportPortfolioUseCase` (in `application/usecase/`)
+3. Create Use Case Implementation: `ExportPortfolioUseCaseImpl` (in `application/usecase/impl/`)
+4. Create Domain Service: `PortfolioExportService` (in `domain/service/`) for CSV generation
+5. Add controller endpoint: `@GetMapping("/export")` calls use case, returns `ResponseEntity<byte[]>` with CSV content-type
+6. No DB change needed (reads from existing entities)
 
 ### Frontend
 1. Add method to `PortfolioService`: `exportPortfolio(): Observable<Blob>` calls GET with `responseType: 'blob'`

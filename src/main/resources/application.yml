@@ -21,6 +21,10 @@ spring:
   sql:
     init:
       continue-on-error: false
+  cache:
+    type: simple  # Uses ConcurrentHashMap for caching (suitable for single-instance deployments)
+
+# ...existing code...
 
 flyway:
   enabled: true

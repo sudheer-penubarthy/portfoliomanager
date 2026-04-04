@@ -1,6 +1,9 @@
 package com.sudheer.portfoliotracker.api.controller;
 
 import com.sudheer.portfoliotracker.api.dto.GoalDto;
+import com.sudheer.portfoliotracker.api.dto.GoalOptionDto;
+import com.sudheer.portfoliotracker.api.dto.SchemeGoalAllocationDto;
+import com.sudheer.portfoliotracker.api.dto.UpdateSchemeGoalAllocationsRequest;
 import com.sudheer.portfoliotracker.service.GoalService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -49,6 +52,12 @@ public class GoalController {
         log.debug("Fetching goals for user: {}", userId);
         List<GoalDto> goals = goalService.getUserGoals(userId);
         return ResponseEntity.ok(goals);
+    }
+
+    @GetMapping("/options")
+    public ResponseEntity<List<GoalOptionDto>> getUserGoalOptions(@RequestParam Long userId) {
+        log.debug("Fetching goal options for user: {}", userId);
+        return ResponseEntity.ok(goalService.getUserGoalOptions(userId));
     }
 
     /**
@@ -134,6 +143,23 @@ public class GoalController {
         log.debug("Fetching alignments for goal: {}", goalId);
         List<String> alignments = goalService.getGoalFundAlignments(goalId, userId);
         return ResponseEntity.ok(alignments);
+    }
+
+    @GetMapping("/schemes/{schemeCode}/alignments")
+    public ResponseEntity<List<SchemeGoalAllocationDto>> getSchemeGoalAllocations(
+            @PathVariable String schemeCode,
+            @RequestParam Long userId) {
+        log.debug("Fetching goal allocations for user: {}, scheme: {}", userId, schemeCode);
+        return ResponseEntity.ok(goalService.getSchemeGoalAllocations(userId, schemeCode));
+    }
+
+    @PutMapping("/schemes/{schemeCode}/alignments")
+    public ResponseEntity<List<SchemeGoalAllocationDto>> updateSchemeGoalAllocations(
+            @PathVariable String schemeCode,
+            @RequestParam Long userId,
+            @Valid @RequestBody UpdateSchemeGoalAllocationsRequest request) {
+        log.info("Updating goal allocations for user: {}, scheme: {}", userId, schemeCode);
+        return ResponseEntity.ok(goalService.updateSchemeGoalAllocations(userId, schemeCode, request.getAllocations()));
     }
 
     /**

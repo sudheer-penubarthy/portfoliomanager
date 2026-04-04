@@ -19,15 +19,22 @@ public class PortfolioSummaryDto {
     private BigDecimal currentPortfolioValue;
     private BigDecimal totalGain;
     private Double gainPercentage;
+    private BigDecimal dailyGain;
+    private Double dailyGainPercentage;
     private Double xirr;
     private LocalDate latestNavDate;
     private LocalDate latestSnapshotDate;
     private BigDecimal latestSnapshotValue;
+    private String snapshotDetailLevel;
     private BigDecimal valuationDiscrepancyAmount;
     private Double valuationDiscrepancyPercentage;
     private Boolean hasValuationDiscrepancy;
 
     private Integer totalFunds;
     private Integer totalHoldings;
+    private BigDecimal equityValue;
+    private BigDecimal debtValue;
+    private Double equityPercentage;
+    private Double debtPercentage;
 }
 

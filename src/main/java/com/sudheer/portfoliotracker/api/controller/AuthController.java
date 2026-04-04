@@ -58,25 +58,25 @@ public class AuthController {
     })
     public ResponseEntity<Map<String, Object>> register(@Valid @RequestBody RegistrationRequest registrationRequest) {
         // ...existing code...
-        log.info("User registration request for email: {}", registrationRequest.getEmail());
+        log.info("User registration request for email: {}", registrationRequest.email());
 
         // Check if user already exists
-        if (userRepository.findByEmail(registrationRequest.getEmail()).isPresent()) {
-            log.warn("Registration failed: email already exists - {}", registrationRequest.getEmail());
+        if (userRepository.findByEmail(registrationRequest.email()).isPresent()) {
+            log.warn("Registration failed: email already exists - {}", registrationRequest.email());
             return ResponseEntity.badRequest().body(Map.of("error", "Email already registered"));
         }
 
         // Validate PAN format (10 characters, alphanumeric)
-        if (!registrationRequest.getPan().matches("^[A-Z0-9]{10}$")) {
-            log.warn("Registration failed: invalid PAN - {}", registrationRequest.getPan());
+        if (!registrationRequest.pan().matches("^[A-Z0-9]{10}$")) {
+            log.warn("Registration failed: invalid PAN - {}", registrationRequest.pan());
             return ResponseEntity.badRequest().body(Map.of("error", "Invalid PAN format"));
         }
 
         // Create new user
         PortfolioUser user = PortfolioUser.builder()
-                .email(registrationRequest.getEmail())
-                .pan(registrationRequest.getPan())
-                .name(registrationRequest.getFirstName() + " " + registrationRequest.getLastName())
+                .email(registrationRequest.email())
+                .pan(registrationRequest.pan())
+                .name(registrationRequest.firstName() + " " + registrationRequest.lastName())
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
@@ -119,12 +119,12 @@ public class AuthController {
             )
     })
     public ResponseEntity<Map<String, Object>> login(@Valid @RequestBody LoginRequest loginRequest) {
-        log.info("User login request for email: {}", loginRequest.getEmail());
+        log.info("User login request for email: {}", loginRequest.email());
 
         // Find user by email
-        Optional<PortfolioUser> userOpt = userRepository.findByEmail(loginRequest.getEmail());
+        Optional<PortfolioUser> userOpt = userRepository.findByEmail(loginRequest.email());
         if (userOpt.isEmpty()) {
-            log.warn("Login failed: user not found - {}", loginRequest.getEmail());
+            log.warn("Login failed: user not found - {}", loginRequest.email());
             return ResponseEntity.badRequest().body(Map.of("error", "Invalid email or password"));
         }
 
@@ -168,7 +168,7 @@ public class AuthController {
             )
     })
     public ResponseEntity<Map<String, Object>> refreshToken(@Valid @RequestBody RefreshTokenRequest refreshTokenRequest) {
-        String refreshToken = refreshTokenRequest.getRefreshToken();
+        String refreshToken = refreshTokenRequest.refreshToken();
         log.info("Token refresh request received");
 
         // Validate refresh token
@@ -278,39 +278,24 @@ public class AuthController {
 
     // ============== Request/Response DTOs ==============
 
-    @lombok.Data
-    public static class RegistrationRequest {
-        @Email
-        @NotBlank
-        private String email;
-
-        @NotBlank
-        private String pan;
-
-        @NotBlank
-        private String firstName;
-
-        @NotBlank
-        private String lastName;
-
-        @NotBlank
-        private String password;
+    public record RegistrationRequest(
+            @Email @NotBlank String email,
+            @NotBlank String pan,
+            @NotBlank String firstName,
+            @NotBlank String lastName,
+            @NotBlank String password
+    ) {
     }
 
-    @lombok.Data
-    public static class LoginRequest {
-        @Email
-        @NotBlank
-        private String email;
-
-        @NotBlank
-        private String password;
+    public record LoginRequest(
+            @Email @NotBlank String email,
+            @NotBlank String password
+    ) {
     }
 
-    @lombok.Data
-    public static class RefreshTokenRequest {
-        @NotBlank(message = "Refresh token is required")
-        private String refreshToken;
+    public record RefreshTokenRequest(
+            @NotBlank(message = "Refresh token is required") String refreshToken
+    ) {
     }
 }
 

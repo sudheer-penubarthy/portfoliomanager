@@ -2,6 +2,7 @@ package com.sudheer.portfoliotracker.service;
 
 import com.sudheer.portfoliotracker.api.dto.HoldingDto;
 import com.sudheer.portfoliotracker.api.dto.PortfolioSummaryDto;
+import com.sudheer.portfoliotracker.api.dto.SchemeGoalAllocationDto;
 import com.sudheer.portfoliotracker.api.dto.TransactionDetailsDto;
 import com.sudheer.portfoliotracker.infrastructure.persistence.entity.UserHolding;
 import com.sudheer.portfoliotracker.infrastructure.persistence.entity.UserTransaction;
@@ -9,12 +10,14 @@ import com.sudheer.portfoliotracker.infrastructure.persistence.entity.AmfiNav;
 import com.sudheer.portfoliotracker.infrastructure.persistence.entity.AmfiScheme;
 import com.sudheer.portfoliotracker.infrastructure.persistence.entity.GoalEntity;
 import com.sudheer.portfoliotracker.infrastructure.persistence.entity.GoalFundAlignmentEntity;
+import com.sudheer.portfoliotracker.infrastructure.persistence.entity.PortfolioSnapshot;
 import com.sudheer.portfoliotracker.repository.UserHoldingRepository;
 import com.sudheer.portfoliotracker.repository.UserTransactionRepository;
 import com.sudheer.portfoliotracker.repository.AmfiNavRepository;
 import com.sudheer.portfoliotracker.repository.AmfiSchemeRepository;
 import com.sudheer.portfoliotracker.repository.GoalFundAlignmentRepository;
 import com.sudheer.portfoliotracker.repository.GoalRepository;
+import com.sudheer.portfoliotracker.repository.PortfolioSnapshotRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
@@ -35,19 +38,25 @@ public class PortfolioService {
     private final AmfiSchemeRepository schemeRepository;
     private final GoalRepository goalRepository;
     private final GoalFundAlignmentRepository goalFundAlignmentRepository;
+    private final PortfolioSnapshotRepository portfolioSnapshotRepository;
+    private final SchemeRegistry schemeRegistry;
 
     public PortfolioService(UserHoldingRepository holdingRepository,
                            UserTransactionRepository transactionRepository,
                            AmfiNavRepository navRepository,
                            AmfiSchemeRepository schemeRepository,
                            GoalRepository goalRepository,
-                           GoalFundAlignmentRepository goalFundAlignmentRepository) {
+                           GoalFundAlignmentRepository goalFundAlignmentRepository,
+                           PortfolioSnapshotRepository portfolioSnapshotRepository,
+                           SchemeRegistry schemeRegistry) {
         this.holdingRepository = holdingRepository;
         this.transactionRepository = transactionRepository;
         this.navRepository = navRepository;
         this.schemeRepository = schemeRepository;
         this.goalRepository = goalRepository;
         this.goalFundAlignmentRepository = goalFundAlignmentRepository;
+        this.portfolioSnapshotRepository = portfolioSnapshotRepository;
+        this.schemeRegistry = schemeRegistry;
     }
 
     /**
@@ -62,9 +71,12 @@ public class PortfolioService {
 
         BigDecimal totalInvestedAmount = BigDecimal.ZERO;
         BigDecimal currentPortfolioValue = BigDecimal.ZERO;
+        BigDecimal previousPortfolioValue = BigDecimal.ZERO;
         LocalDate latestNavDate = null;
-        BigDecimal latestSnapshotValue = BigDecimal.ZERO;
-        LocalDate latestSnapshotDate = null;
+        BigDecimal holdingsSnapshotValue = BigDecimal.ZERO;
+        LocalDate holdingsSnapshotDate = null;
+        BigDecimal equityValue = BigDecimal.ZERO;
+        BigDecimal debtValue = BigDecimal.ZERO;
 
         for (UserHolding holding : holdings) {
             totalInvestedAmount = totalInvestedAmount.add(holding.getTotalCost());
@@ -73,17 +85,38 @@ public class PortfolioService {
             if (latestNav.isPresent()) {
                 BigDecimal currentValue = holding.getUnits().multiply(latestNav.get().getNavValue());
                 currentPortfolioValue = currentPortfolioValue.add(currentValue);
+                BigDecimal previousValue = findPreviousNavValue(holding, resolvedSchemes.get(holding.getSchemeCode()));
+                previousPortfolioValue = previousPortfolioValue.add(previousValue);
                 LocalDate navDate = latestNav.get().getNavDate();
                 if (navDate != null && (latestNavDate == null || navDate.isAfter(latestNavDate))) {
                     latestNavDate = navDate;
                 }
+                if (isDebtLike(resolvedSchemes.get(holding.getSchemeCode()))) {
+                    debtValue = debtValue.add(currentValue);
+                } else {
+                    equityValue = equityValue.add(currentValue);
+                }
             }
 
             if (holding.getSnapshotCurrentValue() != null) {
-                latestSnapshotValue = latestSnapshotValue.add(holding.getSnapshotCurrentValue());
+                holdingsSnapshotValue = holdingsSnapshotValue.add(holding.getSnapshotCurrentValue());
             }
-            if (holding.getSnapshotNavDate() != null && (latestSnapshotDate == null || holding.getSnapshotNavDate().isAfter(latestSnapshotDate))) {
-                latestSnapshotDate = holding.getSnapshotNavDate();
+            if (holding.getSnapshotNavDate() != null && (holdingsSnapshotDate == null || holding.getSnapshotNavDate().isAfter(holdingsSnapshotDate))) {
+                holdingsSnapshotDate = holding.getSnapshotNavDate();
+            }
+        }
+
+        Optional<PortfolioSnapshot> latestPortfolioSnapshot = portfolioSnapshotRepository.findTopByUserIdOrderBySnapshotDateDescIdDesc(userId);
+        LocalDate latestSnapshotDate = holdingsSnapshotDate;
+        BigDecimal latestSnapshotValue = holdingsSnapshotDate != null ? holdingsSnapshotValue : null;
+        String snapshotDetailLevel = holdingsSnapshotDate != null ? "FUND" : null;
+
+        if (latestPortfolioSnapshot.isPresent()) {
+            PortfolioSnapshot portfolioSnapshot = latestPortfolioSnapshot.get();
+            if (latestSnapshotDate == null || portfolioSnapshot.getSnapshotDate().isAfter(latestSnapshotDate)) {
+                latestSnapshotDate = portfolioSnapshot.getSnapshotDate();
+                latestSnapshotValue = portfolioSnapshot.getTotalMarketValue();
+                snapshotDetailLevel = portfolioSnapshot.getSnapshotDetailLevel();
             }
         }
 
@@ -91,10 +124,16 @@ public class PortfolioService {
         Double gainPercentage = totalInvestedAmount.compareTo(BigDecimal.ZERO) > 0
                 ? (totalGain.doubleValue() / totalInvestedAmount.doubleValue()) * 100
                 : 0.0;
+        BigDecimal dailyGain = currentPortfolioValue.subtract(previousPortfolioValue);
+        Double dailyGainPercentage = previousPortfolioValue.compareTo(BigDecimal.ZERO) > 0
+                ? dailyGain.divide(previousPortfolioValue, 8, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)).doubleValue()
+                : 0.0;
         BigDecimal valuationDiscrepancyAmount = latestSnapshotDate != null
+                && latestSnapshotValue != null
                 ? currentPortfolioValue.subtract(latestSnapshotValue)
                 : BigDecimal.ZERO;
-        Double valuationDiscrepancyPercentage = latestSnapshotValue.compareTo(BigDecimal.ZERO) > 0
+        Double valuationDiscrepancyPercentage = latestSnapshotValue != null
+                && latestSnapshotValue.compareTo(BigDecimal.ZERO) > 0
                 ? valuationDiscrepancyAmount.divide(latestSnapshotValue, 8, RoundingMode.HALF_UP)
                 .multiply(BigDecimal.valueOf(100)).doubleValue()
                 : 0.0;
@@ -112,15 +151,26 @@ public class PortfolioService {
                 .currentPortfolioValue(currentPortfolioValue)
                 .totalGain(totalGain)
                 .gainPercentage(gainPercentage)
+                .dailyGain(dailyGain)
+                .dailyGainPercentage(dailyGainPercentage)
                 .xirr(xirr)
                 .latestNavDate(latestNavDate)
                 .latestSnapshotDate(latestSnapshotDate)
                 .latestSnapshotValue(latestSnapshotDate != null ? latestSnapshotValue : null)
+                .snapshotDetailLevel(snapshotDetailLevel)
                 .valuationDiscrepancyAmount(latestSnapshotDate != null ? valuationDiscrepancyAmount : null)
                 .valuationDiscrepancyPercentage(latestSnapshotDate != null ? valuationDiscrepancyPercentage : null)
                 .hasValuationDiscrepancy(hasValuationDiscrepancy)
                 .totalFunds(holdings.size())
                 .totalHoldings((int) holdings.stream().filter(h -> h.getUnits().compareTo(BigDecimal.ZERO) > 0).count())
+                .equityValue(equityValue)
+                .debtValue(debtValue)
+                .equityPercentage(currentPortfolioValue.compareTo(BigDecimal.ZERO) > 0
+                        ? equityValue.divide(currentPortfolioValue, 8, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)).doubleValue()
+                        : 0.0)
+                .debtPercentage(currentPortfolioValue.compareTo(BigDecimal.ZERO) > 0
+                        ? debtValue.divide(currentPortfolioValue, 8, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)).doubleValue()
+                        : 0.0)
                 .build();
     }
 
@@ -162,27 +212,58 @@ public class PortfolioService {
     public BigDecimal calculatePortfolioValueForSchemes(Long userId, List<String> schemeCodes) {
         log.debug("Calculating portfolio value for schemes: {}", schemeCodes);
 
-        BigDecimal totalValue = BigDecimal.ZERO;
+        return calculatePortfolioValuesForSchemes(userId, schemeCodes).values().stream()
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
 
-        for (String schemeCode : schemeCodes) {
-            Optional<UserHolding> holding = holdingRepository.findByUserIdAndSchemeCode(userId, schemeCode);
-
-            if (holding.isPresent()) {
-                Optional<AmfiNav> latestNav = navRepository.findBySchemeCodeAndNavDate(schemeCode, LocalDate.now());
-
-                if (latestNav.isEmpty()) {
-                    latestNav = navRepository.findTopBySchemeCodeOrderByNavDateDesc(schemeCode);
-                }
-
-                if (latestNav.isPresent()) {
-                    BigDecimal currentValue = holding.get().getUnits()
-                            .multiply(latestNav.get().getNavValue());
-                    totalValue = totalValue.add(currentValue);
-                }
-            }
+    public Map<String, BigDecimal> calculatePortfolioValuesForSchemes(Long userId, Collection<String> schemeCodes) {
+        if (schemeCodes == null || schemeCodes.isEmpty()) {
+            return Collections.emptyMap();
         }
 
-        return totalValue;
+        List<String> normalizedSchemeCodes = schemeCodes.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(code -> !code.isEmpty())
+                .distinct()
+                .toList();
+
+        if (normalizedSchemeCodes.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        Map<String, UserHolding> holdingsBySchemeCode = holdingRepository.findByUserIdAndSchemeCodeIn(userId, normalizedSchemeCodes).stream()
+                .collect(Collectors.toMap(
+                        UserHolding::getSchemeCode,
+                        holding -> holding,
+                        (left, right) -> left,
+                        LinkedHashMap::new
+                ));
+
+        if (holdingsBySchemeCode.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        Map<String, BigDecimal> latestNavBySchemeCode = navRepository.findLatestNavsBySchemeCodesIn(new ArrayList<>(holdingsBySchemeCode.keySet())).stream()
+                .collect(Collectors.toMap(
+                        AmfiNav::getSchemeCode,
+                        AmfiNav::getNavValue,
+                        (left, right) -> left,
+                        HashMap::new
+                ));
+
+        Map<String, BigDecimal> valuesBySchemeCode = new LinkedHashMap<>();
+        for (Map.Entry<String, UserHolding> entry : holdingsBySchemeCode.entrySet()) {
+            BigDecimal latestNav = latestNavBySchemeCode.get(entry.getKey());
+            if (latestNav == null) {
+                continue;
+            }
+
+            BigDecimal units = entry.getValue().getUnits() == null ? BigDecimal.ZERO : entry.getValue().getUnits();
+            valuesBySchemeCode.put(entry.getKey(), units.multiply(latestNav));
+        }
+
+        return valuesBySchemeCode;
     }
 
     /**
@@ -250,6 +331,7 @@ public class PortfolioService {
 
     /**
      * Get detailed holdings for a user, including invested/current values.
+     * OPTIMIZED: Uses batch NAV queries and cached scheme resolution
      */
     public List<HoldingDto> getHoldingDetails(Long userId, boolean includeInactive) {
         log.debug("Fetching detailed holdings for user: {} (includeInactive={})", userId, includeInactive);
@@ -257,13 +339,42 @@ public class PortfolioService {
         List<UserHolding> holdings = buildPortfolioHoldings(userId, includeInactive);
         Map<String, String> fallbackSchemeNames = buildFallbackSchemeNameMap(userId);
         Map<String, List<String>> goalNamesBySchemeCode = buildGoalNamesBySchemeCode(userId);
+        Map<String, List<SchemeGoalAllocationDto>> goalAllocationsBySchemeCode = buildGoalAllocationsBySchemeCode(userId);
         Map<String, AmfiScheme> resolvedSchemes = resolveSchemesForHoldings(holdings, fallbackSchemeNames);
+
+        // OPTIMIZATION: Batch fetch all NAVs at once instead of per-holding queries
+        List<String> schemeCodesToFetch = holdings.stream()
+                .map(h -> resolvedSchemes.getOrDefault(h.getSchemeCode(), 
+                        new AmfiScheme()).getSchemeCode())
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        if (schemeCodesToFetch.isEmpty()) {
+            schemeCodesToFetch = holdings.stream()
+                    .map(UserHolding::getSchemeCode)
+                    .distinct()
+                    .collect(Collectors.toList());
+        }
+        
+        Map<String, AmfiNav> latestNavsBySchemeCode = findLatestNavsBatch(schemeCodesToFetch);
+        BigDecimal totalPortfolioValue = holdings.stream()
+                .map(holding -> {
+                    AmfiScheme resolvedScheme = resolvedSchemes.get(holding.getSchemeCode());
+                    String navSchemeCode = resolvedScheme != null ? resolvedScheme.getSchemeCode() : holding.getSchemeCode();
+                    AmfiNav nav = latestNavsBySchemeCode.get(navSchemeCode);
+                    return nav == null ? BigDecimal.ZERO : holding.getUnits().multiply(nav.getNavValue());
+                })
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         return holdings.stream()
                 .map(holding -> {
                     AmfiScheme resolvedScheme = resolvedSchemes.get(holding.getSchemeCode());
                     Optional<AmfiScheme> scheme = Optional.ofNullable(resolvedScheme);
-                    Optional<AmfiNav> latestNav = findLatestNav(holding, resolvedScheme);
+                    
+                    // Use pre-fetched NAV from batch query instead of individual lookups
+                    String navSchemeCode = resolvedScheme != null ? resolvedScheme.getSchemeCode() : holding.getSchemeCode();
+                    AmfiNav nav = latestNavsBySchemeCode.get(navSchemeCode);
+                    Optional<AmfiNav> latestNav = Optional.ofNullable(nav);
 
                     BigDecimal navValue = latestNav.map(AmfiNav::getNavValue).orElse(BigDecimal.ZERO);
                     LocalDate navDate = latestNav.map(AmfiNav::getNavDate).orElse(null);
@@ -279,6 +390,17 @@ public class PortfolioService {
                             .multiply(BigDecimal.valueOf(100)).doubleValue()
                             : null;
                     BigDecimal pnl = currentValue.subtract(totalCost);
+                    Double currentReturnPercentage = totalCost.compareTo(BigDecimal.ZERO) > 0
+                            ? pnl.divide(totalCost, 8, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)).doubleValue()
+                            : 0.0;
+                    BigDecimal dailyReturn = currentValue.subtract(findPreviousNavValue(holding, resolvedScheme));
+                    BigDecimal previousValue = currentValue.subtract(dailyReturn);
+                    Double dailyReturnPercentage = previousValue.compareTo(BigDecimal.ZERO) > 0
+                            ? dailyReturn.divide(previousValue, 8, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)).doubleValue()
+                            : 0.0;
+                    Double portfolioWeightPercentage = totalPortfolioValue.compareTo(BigDecimal.ZERO) > 0
+                            ? currentValue.divide(totalPortfolioValue, 8, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)).doubleValue()
+                            : 0.0;
                     Double xirr = totalCost.compareTo(BigDecimal.ZERO) > 0
                             ? pnl.divide(totalCost, 8, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)).doubleValue()
                             : 0.0;
@@ -297,8 +419,13 @@ public class PortfolioService {
                             valuationDiscrepancyPercentage,
                             holding.getUnits() != null && holding.getUnits().compareTo(BigDecimal.ZERO) > 0,
                             pnl,
+                            currentReturnPercentage,
+                            dailyReturn,
+                            dailyReturnPercentage,
+                            portfolioWeightPercentage,
                             xirr,
-                            goalNamesBySchemeCode.getOrDefault(holding.getSchemeCode(), Collections.emptyList())
+                            goalNamesBySchemeCode.getOrDefault(holding.getSchemeCode(), Collections.emptyList()),
+                            goalAllocationsBySchemeCode.getOrDefault(holding.getSchemeCode(), Collections.emptyList())
                     );
                 })
                 .sorted(Comparator.comparing(HoldingDto::getCurrentValue).reversed())
@@ -318,8 +445,13 @@ public class PortfolioService {
                                         Double valuationDiscrepancyPercentage,
                                         boolean active,
                                         BigDecimal pnl,
+                                        Double currentReturnPercentage,
+                                        BigDecimal dailyReturn,
+                                        Double dailyReturnPercentage,
+                                        Double portfolioWeightPercentage,
                                         Double xirr,
-                                        List<String> goalNames) {
+                                        List<String> goalNames,
+                                        List<SchemeGoalAllocationDto> goalAllocations) {
         return new HoldingDtoBuilder()
                 .withSchemeCode(holding.getSchemeCode())
                 .withSchemeName(scheme.map(AmfiScheme::getSchemeName).orElse(
@@ -338,8 +470,13 @@ public class PortfolioService {
                 .withHasValuationDiscrepancy(valuationDiscrepancyAmount != null && valuationDiscrepancyAmount.abs().compareTo(BigDecimal.ONE) >= 0)
                 .withActive(active)
                 .withPnl(pnl)
+                .withCurrentReturnPercentage(currentReturnPercentage)
+                .withDailyReturn(dailyReturn)
+                .withDailyReturnPercentage(dailyReturnPercentage)
+                .withPortfolioWeightPercentage(portfolioWeightPercentage)
                 .withXirr(xirr)
                 .withGoalNames(goalNames)
+                .withGoalAllocations(goalAllocations)
                 .build();
     }
 
@@ -403,10 +540,45 @@ public class PortfolioService {
         return latestNav;
     }
 
+    private BigDecimal findPreviousNavValue(UserHolding holding, AmfiScheme resolvedScheme) {
+        String navSchemeCode = resolvedScheme != null ? resolvedScheme.getSchemeCode() : holding.getSchemeCode();
+        List<AmfiNav> navs = navRepository.findTop2BySchemeCodeOrderByNavDateDesc(navSchemeCode);
+        if (navs.size() < 2) {
+            return holding.getUnits().multiply(navs.isEmpty() ? BigDecimal.ZERO : navs.get(0).getNavValue());
+        }
+        return holding.getUnits().multiply(navs.get(1).getNavValue());
+    }
+
+    private boolean isDebtLike(AmfiScheme scheme) {
+        String instrumentType = scheme != null && scheme.getInstrumentType() != null
+                ? scheme.getInstrumentType().toLowerCase(Locale.ROOT)
+                : "";
+        return instrumentType.contains("bond")
+                || instrumentType.contains("debt")
+                || instrumentType.contains("cash")
+                || instrumentType.contains("arbitrage")
+                || instrumentType.contains("liquid")
+                || instrumentType.contains("income");
+    }
+
+    /**
+     * Batch fetch latest NAVs for multiple scheme codes (OPTIMIZED)
+     * This reduces N individual queries to 1 batch query
+     */
+    private Map<String, AmfiNav> findLatestNavsBatch(List<String> schemeCodes) {
+        if (schemeCodes == null || schemeCodes.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        List<AmfiNav> navs = navRepository.findLatestNavsBySchemeCodesIn(schemeCodes);
+        return navs.stream()
+                .collect(Collectors.toMap(AmfiNav::getSchemeCode, nav -> nav, (left, right) -> left));
+    }
+
     private Map<String, AmfiScheme> resolveSchemesForHoldings(List<UserHolding> holdings, Map<String, String> fallbackSchemeNames) {
-        List<AmfiScheme> allSchemes = schemeRepository.findAll();
-        Map<String, AmfiScheme> byCode = allSchemes.stream()
-                .collect(Collectors.toMap(AmfiScheme::getSchemeCode, scheme -> scheme, (left, right) -> left));
+        // Use cached schemes instead of loading from DB
+        Map<String, AmfiScheme> byCode = schemeRegistry.getAllSchemesByCode();
+        Map<String, SchemeRegistry.PreProcessedScheme> preProcessedSchemes = schemeRegistry.getPreProcessedSchemes();
 
         Map<String, AmfiScheme> resolved = new HashMap<>();
         for (UserHolding holding : holdings) {
@@ -421,7 +593,8 @@ public class PortfolioService {
                 continue;
             }
 
-            AmfiScheme fuzzyMatch = findBestSchemeMatch(fallbackSchemeName, allSchemes);
+            // Use pre-processed schemes for fuzzy matching
+            AmfiScheme fuzzyMatch = findBestSchemeMatch(fallbackSchemeName, preProcessedSchemes);
             if (fuzzyMatch != null) {
                 log.info("Resolved holding scheme code {} to AMFI scheme code {} using fallback name {}", holding.getSchemeCode(), fuzzyMatch.getSchemeCode(), fallbackSchemeName);
                 resolved.put(holding.getSchemeCode(), fuzzyMatch);
@@ -431,7 +604,7 @@ public class PortfolioService {
         return resolved;
     }
 
-    private AmfiScheme findBestSchemeMatch(String fallbackSchemeName, List<AmfiScheme> allSchemes) {
+    private AmfiScheme findBestSchemeMatch(String fallbackSchemeName, Map<String, SchemeRegistry.PreProcessedScheme> preProcessedSchemes) {
         String normalizedTarget = normalizeSchemeName(fallbackSchemeName);
         Set<String> targetTokens = tokenizeSchemeName(normalizedTarget);
         if (targetTokens.isEmpty()) {
@@ -440,9 +613,10 @@ public class PortfolioService {
 
         AmfiScheme bestMatch = null;
         int bestScore = 0;
-        for (AmfiScheme scheme : allSchemes) {
-            String normalizedCandidate = normalizeSchemeName(scheme.getSchemeName());
-            Set<String> candidateTokens = tokenizeSchemeName(normalizedCandidate);
+        
+        // Iterate through pre-processed schemes (normalized and tokenized already)
+        for (SchemeRegistry.PreProcessedScheme preProcessed : preProcessedSchemes.values()) {
+            Set<String> candidateTokens = preProcessed.tokens();
             if (candidateTokens.isEmpty()) {
                 continue;
             }
@@ -459,14 +633,14 @@ public class PortfolioService {
             }
 
             int score = overlap * 10;
-            if (normalizedCandidate.contains(normalizedTarget) || normalizedTarget.contains(normalizedCandidate)) {
+            if (preProcessed.normalizedName().contains(normalizedTarget) || normalizedTarget.contains(preProcessed.normalizedName())) {
                 score += 15;
             }
             score -= Math.abs(candidateTokens.size() - targetTokens.size());
 
             if (score > bestScore) {
                 bestScore = score;
-                bestMatch = scheme;
+                bestMatch = preProcessed.scheme();
             }
         }
 
@@ -510,22 +684,47 @@ public class PortfolioService {
 
     private Map<String, List<String>> buildGoalNamesBySchemeCode(Long userId) {
         try {
-            Map<Long, String> goalNamesById = goalRepository.findByUserId(userId).stream()
-                    .collect(Collectors.toMap(GoalEntity::getId, GoalEntity::getName));
-
-            Map<String, List<String>> goalNamesBySchemeCode = new HashMap<>();
-            for (Map.Entry<Long, String> goalEntry : goalNamesById.entrySet()) {
-                List<GoalFundAlignmentEntity> alignments = goalFundAlignmentRepository.findByGoalId(goalEntry.getKey());
-                for (GoalFundAlignmentEntity alignment : alignments) {
-                    goalNamesBySchemeCode
-                            .computeIfAbsent(alignment.getSchemeCode(), ignored -> new ArrayList<>())
-                            .add(goalEntry.getValue());
-                }
-            }
-
-            return goalNamesBySchemeCode;
+            return buildGoalAllocationsBySchemeCode(userId).entrySet().stream()
+                    .collect(Collectors.toMap(
+                            Map.Entry::getKey,
+                            entry -> entry.getValue().stream()
+                                    .map(SchemeGoalAllocationDto::getGoalName)
+                                    .filter(Objects::nonNull)
+                                    .toList()
+                    ));
         } catch (DataAccessException ex) {
             log.warn("Goal tables are not available yet; portfolio goal labels will be skipped: {}", ex.getMessage());
+            return Collections.emptyMap();
+        }
+    }
+
+    private Map<String, List<SchemeGoalAllocationDto>> buildGoalAllocationsBySchemeCode(Long userId) {
+        try {
+            Map<Long, GoalEntity> goalsById = goalRepository.findByUserIdOrderByTargetDateAsc(userId).stream()
+                    .collect(Collectors.toMap(GoalEntity::getId, goal -> goal, (left, right) -> left, LinkedHashMap::new));
+            if (goalsById.isEmpty()) {
+                return Collections.emptyMap();
+            }
+
+            Map<String, List<SchemeGoalAllocationDto>> allocationsBySchemeCode = new HashMap<>();
+            for (GoalFundAlignmentEntity alignment : goalFundAlignmentRepository.findByGoalIdIn(List.copyOf(goalsById.keySet()))) {
+                GoalEntity goal = goalsById.get(alignment.getGoalId());
+                if (goal == null) {
+                    continue;
+                }
+                allocationsBySchemeCode.computeIfAbsent(alignment.getSchemeCode(), ignored -> new ArrayList<>())
+                        .add(SchemeGoalAllocationDto.builder()
+                                .goalId(goal.getId())
+                                .goalName(goal.getName())
+                                .allocationPercentage(alignment.getAllocationPercentage())
+                                .build());
+            }
+
+            allocationsBySchemeCode.values().forEach(list ->
+                    list.sort(Comparator.comparing(dto -> dto.getGoalName() == null ? "" : dto.getGoalName(), String.CASE_INSENSITIVE_ORDER)));
+            return allocationsBySchemeCode;
+        } catch (DataAccessException ex) {
+            log.warn("Goal alignment tables are not available yet; portfolio goal allocations will be skipped: {}", ex.getMessage());
             return Collections.emptyMap();
         }
     }
@@ -613,6 +812,26 @@ public class PortfolioService {
             return this;
         }
 
+        private HoldingDtoBuilder withCurrentReturnPercentage(Double currentReturnPercentage) {
+            dto.setCurrentReturnPercentage(currentReturnPercentage);
+            return this;
+        }
+
+        private HoldingDtoBuilder withDailyReturn(BigDecimal dailyReturn) {
+            dto.setDailyReturn(dailyReturn);
+            return this;
+        }
+
+        private HoldingDtoBuilder withDailyReturnPercentage(Double dailyReturnPercentage) {
+            dto.setDailyReturnPercentage(dailyReturnPercentage);
+            return this;
+        }
+
+        private HoldingDtoBuilder withPortfolioWeightPercentage(Double portfolioWeightPercentage) {
+            dto.setPortfolioWeightPercentage(portfolioWeightPercentage);
+            return this;
+        }
+
         private HoldingDtoBuilder withXirr(Double xirr) {
             dto.setXirr(xirr);
             return this;
@@ -623,12 +842,13 @@ public class PortfolioService {
             return this;
         }
 
+        private HoldingDtoBuilder withGoalAllocations(List<SchemeGoalAllocationDto> goalAllocations) {
+            dto.setGoalAllocations(goalAllocations);
+            return this;
+        }
+
         private HoldingDto build() {
             return dto;
         }
     }
 }
-
-
-
-
