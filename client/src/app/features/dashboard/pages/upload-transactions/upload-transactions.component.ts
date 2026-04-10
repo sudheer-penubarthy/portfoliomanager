@@ -12,6 +12,7 @@ import { HttpClient } from '@angular/common/http';
 import { AuthService } from '@shared/services/auth.service';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { inject } from '@angular/core';
+import { Router } from '@angular/router';
 
 @Component({
   selector: 'app-upload-transactions',
@@ -35,6 +36,7 @@ export class UploadTransactionsComponent implements OnInit {
   private formBuilder: FormBuilder = inject(FormBuilder);
   private authService: AuthService = inject(AuthService);
   private http: HttpClient = inject(HttpClient);
+  private router: Router = inject(Router);
 
   form: FormGroup;
   loading = false;
@@ -163,9 +165,26 @@ export class UploadTransactionsComponent implements OnInit {
     // Make API call
     this.http.post<any>('/api/users/upload-files', formData).subscribe({
       next: (response: any) => {
-        this.success = `Upload successful! Import ID: ${response.importId}. Status: ${response.status}`;
         this.loading = false;
         this.resetForm();
+        this.router.navigate(['/portfolio'], {
+          state: {
+            uploadResult: {
+              importId: response.importId,
+              uploadId: response.uploadId,
+              status: response.status,
+              uploadMode: response.uploadMode,
+              message: response.message,
+              fundsAdded: response.fundsAdded,
+              fundsRemoved: response.fundsRemoved,
+              transactionsAdded: response.transactionsAdded,
+              activeFundsNow: response.activeFundsNow,
+              rowsProcessed: response.rowsProcessed,
+              rowsInserted: response.rowsInserted,
+              rowsSkipped: response.rowsSkipped
+            }
+          }
+        });
       },
       error: (err: any) => {
         this.error = err.error?.error || err.error?.message || 'Upload failed. Please check your email and file contents.';

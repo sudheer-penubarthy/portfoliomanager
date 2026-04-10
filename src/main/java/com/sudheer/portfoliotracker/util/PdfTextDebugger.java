@@ -7,7 +7,6 @@ import java.io.FileInputStream;
 
 /**
  * Utility to extract and inspect raw PDF text for debugging parser issues
- * 
  * Usage:
  *   java -cp build/libs/portfoliotracker-0.1.0.jar com.sudheer.portfoliotracker.util.PdfTextDebugger <path-to-pdf> [password]
  */

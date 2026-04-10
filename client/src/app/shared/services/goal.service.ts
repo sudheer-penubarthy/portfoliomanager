@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { map, Observable } from 'rxjs';
 
 export interface Goal {
   id?: number;
@@ -18,6 +18,17 @@ export interface Goal {
   updatedAt?: string;
 }
 
+export interface GoalOption {
+  id: number;
+  name: string;
+}
+
+export interface SchemeGoalAllocation {
+  goalId: number;
+  goalName?: string;
+  allocationPercentage: number;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -32,6 +43,10 @@ export class GoalService {
 
   getGoals(userId: number): Observable<Goal[]> {
     return this.http.get<Goal[]>(this.apiUrl, { params: { userId: userId.toString() } });
+  }
+
+  getGoalOptions(userId: number): Observable<GoalOption[]> {
+    return this.http.get<GoalOption[]>(`${this.apiUrl}/options`, { params: { userId: userId.toString() } });
   }
 
   getGoal(userId: number, goalId: number): Observable<Goal> {
@@ -71,6 +86,33 @@ export class GoalService {
   getAllGoalsWithTracking(userId: number): Observable<Goal[]> {
     return this.http.get<Goal[]>(
       `${this.apiUrl}/tracking/all`,
+      { params: { userId: userId.toString() } }
+    ).pipe(
+      map((response: Goal[] | { value?: Goal[] } | null | undefined) => {
+        if (Array.isArray(response)) {
+          return response;
+        }
+
+        if (response && Array.isArray(response.value)) {
+          return response.value;
+        }
+
+        return [];
+      })
+    );
+  }
+
+  getSchemeGoalAllocations(userId: number, schemeCode: string): Observable<SchemeGoalAllocation[]> {
+    return this.http.get<SchemeGoalAllocation[]>(
+      `${this.apiUrl}/schemes/${schemeCode}/alignments`,
+      { params: { userId: userId.toString() } }
+    );
+  }
+
+  updateSchemeGoalAllocations(userId: number, schemeCode: string, allocations: SchemeGoalAllocation[]): Observable<SchemeGoalAllocation[]> {
+    return this.http.put<SchemeGoalAllocation[]>(
+      `${this.apiUrl}/schemes/${schemeCode}/alignments`,
+      { allocations },
       { params: { userId: userId.toString() } }
     );
   }

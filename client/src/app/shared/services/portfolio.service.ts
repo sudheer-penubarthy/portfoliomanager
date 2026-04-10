@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { SchemeGoalAllocation } from './goal.service';
 
 export interface PortfolioSummary {
   userId: number;
@@ -10,15 +11,22 @@ export interface PortfolioSummary {
   currentPortfolioValue: number;
   totalGain: number;
   gainPercentage: number;
+  dailyGain: number;
+  dailyGainPercentage: number;
   xirr: number;
   latestNavDate?: string | null;
   latestSnapshotDate?: string | null;
   latestSnapshotValue?: number | null;
+  snapshotDetailLevel?: string | null;
   valuationDiscrepancyAmount?: number | null;
   valuationDiscrepancyPercentage?: number | null;
   hasValuationDiscrepancy?: boolean | null;
   totalFunds: number;
   totalHoldings: number;
+  equityValue: number;
+  debtValue: number;
+  equityPercentage: number;
+  debtPercentage: number;
 }
 
 export interface TransactionDetails {
@@ -50,8 +58,13 @@ export interface HoldingDetails {
   hasValuationDiscrepancy?: boolean | null;
   active?: boolean | null;
   pnl: number;
+  currentReturnPercentage: number;
+  dailyReturn: number;
+  dailyReturnPercentage: number;
+  portfolioWeightPercentage: number;
   xirr: number;
   goalNames: string[];
+  goalAllocations: SchemeGoalAllocation[];
 }
 
 @Injectable({

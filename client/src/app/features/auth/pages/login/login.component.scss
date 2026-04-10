@@ -14,17 +14,39 @@
   border: 1px solid var(--color-border);
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+
+  mat-card-header {
+    padding: 24px 24px 8px;
+  }
+
+  mat-card-content {
+    padding: 0 24px 24px;
+  }
 }
 
 .header-with-back {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   width: 100%;
+
+  mat-card-title {
+    margin: 0;
+    line-height: 1.2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
 }
 
 .back-button {
   flex-shrink: 0;
+}
+
+.login-card ::ng-deep .mat-mdc-card-header-text {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .full-width {

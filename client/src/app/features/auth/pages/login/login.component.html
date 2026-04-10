@@ -17,7 +17,7 @@
       <form [formGroup]="form" (ngSubmit)="onSubmit()">
         <mat-form-field class="full-width">
           <mat-label>Email</mat-label>
-          <input matInput type="email" formControlName="email" [disabled]="loading">
+          <input matInput type="email" formControlName="email">
           <mat-error *ngIf="submitted && f['email'].errors">
             <span *ngIf="f['email'].errors['required']">Email is required</span>
             <span *ngIf="f['email'].errors['email']">Please enter a valid email</span>
@@ -26,7 +26,7 @@
 
         <mat-form-field class="full-width">
           <mat-label>Password</mat-label>
-          <input matInput type="password" formControlName="password" [disabled]="loading">
+          <input matInput type="password" formControlName="password">
           <mat-error *ngIf="submitted && f['password'].errors">
             <span *ngIf="f['password'].errors['required']">Password is required</span>
             <span *ngIf="f['password'].errors['minlength']">Password must be at least 6 characters</span>

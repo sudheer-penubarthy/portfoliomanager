@@ -1,24 +1,23 @@
 package com.sudheer.portfoliotracker.api.controller;
 
 import com.sudheer.portfoliotracker.api.dto.UserDto;
-import com.sudheer.portfoliotracker.infrastructure.persistence.entity.PortfolioUser;
 import com.sudheer.portfoliotracker.exception.ResourceNotFoundException;
+import com.sudheer.portfoliotracker.infrastructure.persistence.entity.PortfolioUser;
 import com.sudheer.portfoliotracker.repository.PortfolioUserRepository;
 import com.sudheer.portfoliotracker.service.JwtTokenService;
-import io.swagger.v3.oas.annotations.OpenAPIDefinition;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
 import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -211,7 +210,8 @@ public class AuthController {
 
         return ResponseEntity.ok(response);
     }
-     /*
+
+    /*
      * @param userId the user ID
      * @return 200 OK with user data
      */
@@ -238,7 +238,7 @@ public class AuthController {
     /**
      * Update user profile
      *
-     * @param userId the user ID
+     * @param userId  the user ID
      * @param userDto the updated user data
      * @return 200 OK with updated user data
      */

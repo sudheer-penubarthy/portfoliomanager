@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
@@ -10,6 +10,7 @@ import { MatChipsModule } from '@angular/material/chips';
 import { GoalService, Goal } from '@shared/services/goal.service';
 import { AuthService } from '@shared/services/auth.service';
 import { inject } from '@angular/core';
+import { finalize } from 'rxjs';
 
 @Component({
   selector: 'app-goals-list',
@@ -30,6 +31,7 @@ export class GoalsListComponent implements OnInit {
   private goalService: GoalService = inject(GoalService);
   private authService: AuthService = inject(AuthService);
   private router: Router = inject(Router);
+  private cdr: ChangeDetectorRef = inject(ChangeDetectorRef);
 
   goals: Goal[] = [];
   loading = true;
@@ -42,14 +44,21 @@ export class GoalsListComponent implements OnInit {
 
   loadGoals(): void {
     const userId = this.authService.getCurrentUserId();
-    this.goalService.getAllGoalsWithTracking(userId).subscribe({
-      next: (data: any) => {
-        this.goals = data;
+    this.loading = true;
+    this.error = '';
+
+    this.goalService.getAllGoalsWithTracking(userId).pipe(
+      finalize(() => {
         this.loading = false;
+        this.cdr.detectChanges();
+      })
+    ).subscribe({
+      next: (data: Goal[]) => {
+        this.goals = Array.isArray(data) ? data : [];
       },
       error: (err: any) => {
+        this.goals = [];
         this.error = 'Failed to load goals';
-        this.loading = false;
         console.error(err);
       }
     });

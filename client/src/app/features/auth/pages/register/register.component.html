@@ -18,7 +18,7 @@
         <div class="form-row">
           <mat-form-field>
             <mat-label>First Name</mat-label>
-            <input matInput formControlName="firstName" [disabled]="loading">
+            <input matInput formControlName="firstName">
             <mat-error *ngIf="submitted && f['firstName'].errors">
               <span *ngIf="f['firstName'].errors['required']">First name is required</span>
               <span *ngIf="f['firstName'].errors['minlength']">Minimum 2 characters</span>
@@ -27,7 +27,7 @@
 
           <mat-form-field>
             <mat-label>Last Name</mat-label>
-            <input matInput formControlName="lastName" [disabled]="loading">
+            <input matInput formControlName="lastName">
             <mat-error *ngIf="submitted && f['lastName'].errors">
               <span *ngIf="f['lastName'].errors['required']">Last name is required</span>
               <span *ngIf="f['lastName'].errors['minlength']">Minimum 2 characters</span>
@@ -37,7 +37,7 @@
 
         <mat-form-field class="full-width">
           <mat-label>Email</mat-label>
-          <input matInput type="email" formControlName="email" [disabled]="loading">
+          <input matInput type="email" formControlName="email">
           <mat-error *ngIf="submitted && f['email'].errors">
             <span *ngIf="f['email'].errors['required']">Email is required</span>
             <span *ngIf="f['email'].errors['email']">Please enter a valid email</span>
@@ -46,7 +46,7 @@
 
         <mat-form-field class="full-width">
           <mat-label>PAN (10 characters)</mat-label>
-          <input matInput formControlName="pan" [disabled]="loading" placeholder="ABCDE1234F">
+          <input matInput formControlName="pan" placeholder="ABCDE1234F">
           <mat-error *ngIf="submitted && f['pan'].errors">
             <span *ngIf="f['pan'].errors['required']">PAN is required</span>
             <span *ngIf="f['pan'].errors['pattern']">PAN must be 10 alphanumeric characters</span>
@@ -55,7 +55,7 @@
 
         <mat-form-field class="full-width">
           <mat-label>Password</mat-label>
-          <input matInput type="password" formControlName="password" [disabled]="loading">
+          <input matInput type="password" formControlName="password">
           <mat-error *ngIf="submitted && f['password'].errors">
             <span *ngIf="f['password'].errors['required']">Password is required</span>
             <span *ngIf="f['password'].errors['minlength']">Minimum 6 characters</span>
@@ -64,7 +64,7 @@
 
         <mat-form-field class="full-width">
           <mat-label>Confirm Password</mat-label>
-          <input matInput type="password" formControlName="confirmPassword" [disabled]="loading">
+          <input matInput type="password" formControlName="confirmPassword">
           <mat-error *ngIf="submitted && f['confirmPassword'].errors">
             <span *ngIf="f['confirmPassword'].errors['required']">Please confirm password</span>
             <span *ngIf="f['confirmPassword'].errors['passwordMismatch']">Passwords do not match</span>

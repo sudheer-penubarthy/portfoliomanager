@@ -10,13 +10,19 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
-import { forkJoin } from 'rxjs';
+import { forkJoin, of } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 import { PortfolioService, PortfolioSummary, HoldingDetails } from '@shared/services/portfolio.service';
 import { AuthService } from '@shared/services/auth.service';
 import { AmfiService } from '@shared/services/amfi.service';
+import { GoalOption, GoalService } from '@shared/services/goal.service';
 import { inject } from '@angular/core';
+import { Router } from '@angular/router';
 import { FundDetailsComponent } from '../fund-details/fund-details.component';
+import { GoalAllocationDialogComponent } from '../goal-allocation-dialog/goal-allocation-dialog.component';
+import { UploadStatusDialogComponent, UploadStatusDialogData } from '../upload-status-dialog/upload-status-dialog.component';
 
 @Component({
   selector: 'app-portfolio-view',
@@ -33,6 +39,7 @@ import { FundDetailsComponent } from '../fund-details/fund-details.component';
     MatSelectModule,
     MatChipsModule,
     MatSlideToggleModule,
+    MatButtonToggleModule,
     MatDialogModule
   ],
   templateUrl: './portfolio-view.component.html',
@@ -42,12 +49,20 @@ export class PortfolioViewComponent implements OnInit {
   private portfolioService: PortfolioService = inject(PortfolioService);
   private authService: AuthService = inject(AuthService);
   private amfiService: AmfiService = inject(AmfiService);
+  private goalService: GoalService = inject(GoalService);
   private dialog: MatDialog = inject(MatDialog);
+  private router: Router = inject(Router);
   private changeDetectorRef: ChangeDetectorRef = inject(ChangeDetectorRef);
   private ngZone: NgZone = inject(NgZone);
 
   portfolio: PortfolioSummary | null = null;
   holdings: HoldingDetails[] = [];
+  filteredAndSortedHoldings: HoldingDetails[] = [];
+  holdingGroups: { label: string; items: HoldingDetails[] }[] = [];
+  availableTypes: string[] = [];
+  availableGoals: string[] = [];
+  reconciliationRows: HoldingDetails[] = [];
+  goalOptions: GoalOption[] = [];
   loading = true;
   error = '';
   syncingAmfi = false;
@@ -58,9 +73,11 @@ export class PortfolioViewComponent implements OnInit {
   groupBy = 'NONE';
   sortBy = 'CURRENT_VALUE';
   showAllFunds = false;
+  viewMode: 'reconciliation' | 'classic' = 'classic';
   displayedColumns: string[] = ['schemeName', 'units', 'totalCost', 'latestNav', 'currentValue', 'pnl', 'xirr', 'goalNames', 'actions'];
 
   ngOnInit(): void {
+    this.openUploadStatusDialogIfPresent();
     this.loadPortfolio();
   }
 
@@ -70,21 +87,29 @@ export class PortfolioViewComponent implements OnInit {
     this.syncMessage = '';
     forkJoin({
       summary: this.portfolioService.getPortfolioSummary(userId),
-      holdings: this.portfolioService.getHoldingDetails(userId, this.showAllFunds)
+      holdings: this.portfolioService.getHoldingDetails(userId, this.showAllFunds),
+      goalOptions: this.goalService.getGoalOptions(userId).pipe(
+        catchError(err => {
+          console.error('Failed to preload goal options', err);
+          return of([]);
+        })
+      )
     }).subscribe({
-      next: ({ summary, holdings }) => {
+      next: ({ summary, holdings, goalOptions }) => {
         this.ngZone.run(() => {
           this.portfolio = summary;
           this.holdings = holdings;
+          this.goalOptions = goalOptions;
+          this.refreshDerivedState();
           this.loading = false;
           this.changeDetectorRef.detectChanges();
         });
       },
       error: (err: any) => {
         this.ngZone.run(() => {
-          this.error = 'Failed to load portfolio data';
-          this.loading = false;
-          console.error(err);
+        this.error = 'Failed to load portfolio data';
+        this.loading = false;
+        console.error(err);
           this.changeDetectorRef.detectChanges();
         });
       }
@@ -100,6 +125,26 @@ export class PortfolioViewComponent implements OnInit {
       data: {
         schemeCode: holding.schemeCode,
         schemeName: holding.schemeName
+      }
+    });
+  }
+
+  updateGoals(holding: HoldingDetails): void {
+    const dialogRef = this.dialog.open(GoalAllocationDialogComponent, {
+      width: '760px',
+      maxWidth: '95vw',
+      autoFocus: false,
+      data: {
+        schemeCode: holding.schemeCode,
+        schemeName: holding.schemeName,
+        goalAllocations: holding.goalAllocations || [],
+        availableGoals: this.goalOptions
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(updated => {
+      if (updated) {
+        this.loadPortfolio();
       }
     });
   }
@@ -126,7 +171,14 @@ export class PortfolioViewComponent implements OnInit {
     const snapshotDate = this.formatNavDate(this.portfolio.latestSnapshotDate);
 
     if (!this.portfolio.hasValuationDiscrepancy) {
+      if (this.portfolio.snapshotDetailLevel === 'AMC_SUMMARY') {
+        return `Uploaded AMC-summary PDF snapshot from ${snapshotDate} matches closely with the current AMFI-based valuation.`;
+      }
       return `Uploaded valuation snapshot from ${snapshotDate} matches closely with the current AMFI-based valuation.`;
+    }
+
+    if (this.portfolio.snapshotDetailLevel === 'AMC_SUMMARY') {
+      return `Uploaded AMC-summary PDF snapshot from ${snapshotDate} differs from the current AMFI-based valuation by ${this.formatCurrency(discrepancyAmount)} (${discrepancyPercentage.toFixed(2)}%).`;
     }
 
     return `Uploaded valuation snapshot from ${snapshotDate} differs from the current AMFI-based valuation by ${this.formatCurrency(discrepancyAmount)} (${discrepancyPercentage.toFixed(2)}%).`;
@@ -171,7 +223,13 @@ export class PortfolioViewComponent implements OnInit {
     });
   }
 
-  get holdingGroups(): { label: string; items: HoldingDetails[] }[] {
+  private refreshDerivedState(): void {
+    this.availableTypes = Array.from(new Set(this.holdings.map(holding => holding.schemeType).filter(Boolean))).sort();
+    this.availableGoals = Array.from(new Set(this.holdings.flatMap(holding => holding.goalNames || []))).sort();
+
+    const filtered = this.holdings.filter(holding => this.matchesFilters(holding));
+    this.filteredAndSortedHoldings = filtered.sort((left, right) => this.compareHoldings(left, right));
+
     const grouped = new Map<string, HoldingDetails[]>();
 
     for (const holding of this.filteredAndSortedHoldings) {
@@ -181,20 +239,16 @@ export class PortfolioViewComponent implements OnInit {
       grouped.set(label, items);
     }
 
-    return Array.from(grouped.entries()).map(([label, items]) => ({ label, items }));
-  }
+    this.holdingGroups = Array.from(grouped.entries()).map(([label, items]) => ({ label, items }));
 
-  get availableTypes(): string[] {
-    return Array.from(new Set(this.holdings.map(holding => holding.schemeType).filter(Boolean))).sort();
-  }
+    if (this.portfolio?.snapshotDetailLevel === 'AMC_SUMMARY') {
+      this.reconciliationRows = [];
+      return;
+    }
 
-  get availableGoals(): string[] {
-    return Array.from(new Set(this.holdings.flatMap(holding => holding.goalNames || []))).sort();
-  }
-
-  private get filteredAndSortedHoldings(): HoldingDetails[] {
-    const filtered = this.holdings.filter(holding => this.matchesFilters(holding));
-    return filtered.sort((left, right) => this.compareHoldings(left, right));
+    this.reconciliationRows = this.holdings
+      .filter(holding => !!holding.hasValuationDiscrepancy)
+      .sort((left, right) => Math.abs(right.valuationDiscrepancyAmount ?? 0) - Math.abs(left.valuationDiscrepancyAmount ?? 0));
   }
 
   private matchesFilters(holding: HoldingDetails): boolean {
@@ -248,15 +302,61 @@ export class PortfolioViewComponent implements OnInit {
     return goalNames && goalNames.length > 0 ? goalNames.join(', ') : 'Unassigned';
   }
 
+  formatGoalAllocations(holding: HoldingDetails): string {
+    const namedAllocations = (holding.goalAllocations || [])
+      .map(allocation => {
+        const goalName = allocation.goalName?.trim();
+        if (!goalName) {
+          return null;
+        }
+
+        return `${goalName} (${allocation.allocationPercentage}%)`;
+      })
+      .filter((value): value is string => !!value);
+
+    if (namedAllocations.length > 0) {
+      return `Goals: ${namedAllocations.join(', ')}`;
+    }
+
+    const namedGoals = (holding.goalNames || []).filter(goalName => !!goalName?.trim());
+    if (namedGoals.length > 0) {
+      return `Goals: ${namedGoals.join(', ')}`;
+    }
+
+    return 'Goal: Unassigned';
+  }
+
   onShowAllFundsChange(checked: boolean): void {
     this.showAllFunds = checked;
     this.loadPortfolio();
   }
 
-  get reconciliationRows(): HoldingDetails[] {
-    return this.holdings
-      .filter(holding => !!holding.hasValuationDiscrepancy)
-      .sort((left, right) => Math.abs(right.valuationDiscrepancyAmount ?? 0) - Math.abs(left.valuationDiscrepancyAmount ?? 0));
+  setViewMode(mode: 'reconciliation' | 'classic'): void {
+    this.viewMode = mode;
+  }
+
+  onFiltersChanged(): void {
+    this.refreshDerivedState();
+  }
+
+  private openUploadStatusDialogIfPresent(): void {
+    const state = window.history.state as { uploadResult?: UploadStatusDialogData } | null;
+    const uploadResult = state?.uploadResult;
+    if (!uploadResult || (!uploadResult.importId && !uploadResult.uploadId && !uploadResult.message)) {
+      return;
+    }
+
+    this.dialog.open(UploadStatusDialogComponent, {
+      width: '460px',
+      maxWidth: '92vw',
+      autoFocus: false,
+      data: uploadResult
+    });
+
+    this.router.navigate([], {
+      replaceUrl: true,
+      state: {}
+    });
   }
 }
 

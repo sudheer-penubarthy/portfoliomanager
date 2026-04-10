@@ -37,7 +37,9 @@
         <div class="progress-section">
           <div class="progress-header">
             <span>Progress: {{ goal.progressPercentage | number:'1.0-0' }}%</span>
-            <mat-chip>{{ goal.trackingStatus }}</mat-chip>
+            <mat-chip-set>
+              <mat-chip>{{ goal.trackingStatus }}</mat-chip>
+            </mat-chip-set>
           </div>
           <mat-progress-bar
             mode="determinate"

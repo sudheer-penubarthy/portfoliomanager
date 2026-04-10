@@ -64,6 +64,8 @@ export class GoalFormComponent implements OnInit {
   loadGoal(): void {
     if (!this.goalId) return;
     const userId = this.authService.getCurrentUserId();
+    this.loading = true;
+    this.setFormDisabledState(true);
     this.goalService.getGoal(userId, this.goalId).subscribe({
       next: (goal: any) => {
         this.form.patchValue({
@@ -72,9 +74,13 @@ export class GoalFormComponent implements OnInit {
           targetAmount: goal.targetAmount,
           targetDate: new Date(goal.targetDate)
         });
+        this.loading = false;
+        this.setFormDisabledState(false);
       },
       error: (err: any) => {
         this.error = 'Failed to load goal';
+        this.loading = false;
+        this.setFormDisabledState(false);
         console.error(err);
       }
     });
@@ -93,6 +99,7 @@ export class GoalFormComponent implements OnInit {
 
     this.loading = true;
     this.error = '';
+    this.setFormDisabledState(true);
 
     const userId = this.authService.getCurrentUserId();
     const goal: Goal = {
@@ -111,6 +118,7 @@ export class GoalFormComponent implements OnInit {
       error: (err: any) => {
         this.error = 'Failed to save goal';
         this.loading = false;
+        this.setFormDisabledState(false);
         console.error(err);
       }
     });
@@ -118,6 +126,15 @@ export class GoalFormComponent implements OnInit {
 
   cancel(): void {
     this.router.navigate(['/goals']);
+  }
+
+  private setFormDisabledState(disabled: boolean): void {
+    if (disabled) {
+      this.form.disable({ emitEvent: false });
+      return;
+    }
+
+    this.form.enable({ emitEvent: false });
   }
 }
 

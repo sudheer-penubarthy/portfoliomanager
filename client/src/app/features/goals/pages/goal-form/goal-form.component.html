@@ -12,7 +12,7 @@
       <form [formGroup]="form" (ngSubmit)="onSubmit()">
         <mat-form-field class="full-width">
           <mat-label>Goal Name</mat-label>
-          <input matInput formControlName="name" [disabled]="loading" placeholder="e.g., Retirement Fund">
+          <input matInput formControlName="name" placeholder="e.g., Retirement Fund">
           <mat-error *ngIf="submitted && f['name'].errors">
             <span *ngIf="f['name'].errors['required']">Goal name is required</span>
             <span *ngIf="f['name'].errors['minlength']">Minimum 3 characters</span>
@@ -21,12 +21,12 @@
 
         <mat-form-field class="full-width">
           <mat-label>Description</mat-label>
-          <textarea matInput formControlName="description" [disabled]="loading" rows="3"></textarea>
+          <textarea matInput formControlName="description" rows="3"></textarea>
         </mat-form-field>
 
         <mat-form-field class="full-width">
           <mat-label>Target Amount (₹)</mat-label>
-          <input matInput type="number" formControlName="targetAmount" [disabled]="loading">
+          <input matInput type="number" formControlName="targetAmount">
           <mat-error *ngIf="submitted && f['targetAmount'].errors">
             <span *ngIf="f['targetAmount'].errors['required']">Target amount is required</span>
             <span *ngIf="f['targetAmount'].errors['min']">Amount must be greater than 0</span>
@@ -35,7 +35,7 @@
 
         <mat-form-field class="full-width">
           <mat-label>Target Date</mat-label>
-          <input matInput [matDatepicker]="picker" formControlName="targetDate" [disabled]="loading">
+          <input matInput [matDatepicker]="picker" formControlName="targetDate">
           <mat-datepicker-toggle matIconSuffix [for]="picker"></mat-datepicker-toggle>
           <mat-datepicker #picker></mat-datepicker>
           <mat-error *ngIf="submitted && f['targetDate'].errors">

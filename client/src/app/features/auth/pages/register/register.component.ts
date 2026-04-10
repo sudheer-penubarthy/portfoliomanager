@@ -78,18 +78,29 @@ export class RegisterComponent {
 
     this.loading = true;
     this.error = '';
+    this.setFormDisabledState(true);
 
     const { confirmPassword, ...requestData } = this.form.value;
 
     this.authService.register(requestData).subscribe({
       next: () => {
-        this.router.navigate(['/dashboard']);
+        this.router.navigate(['/portfolio']);
       },
       error: (err: any) => {
         this.error = err.error.error || 'Registration failed. Please try again.';
         this.loading = false;
+        this.setFormDisabledState(false);
       }
     });
+  }
+
+  private setFormDisabledState(disabled: boolean): void {
+    if (disabled) {
+      this.form.disable({ emitEvent: false });
+      return;
+    }
+
+    this.form.enable({ emitEvent: false });
   }
 }
 

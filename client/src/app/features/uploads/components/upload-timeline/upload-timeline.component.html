@@ -21,7 +21,7 @@
     <!-- Timeline Events -->
     <div *ngIf="!isLoading && !hasError && timelineEvents.length > 0" class="timeline">
       <div *ngFor="let event of timelineEvents; let last = last" class="timeline-event">
-        <div class="timeline-marker" [ngClass]="'status-' + event.status?.toLowerCase()">
+        <div class="timeline-marker" [ngClass]="'status-' + event.status.toLowerCase()">
           <mat-icon class="event-icon">{{ getStepIcon(event.stepName) }}</mat-icon>
         </div>
 

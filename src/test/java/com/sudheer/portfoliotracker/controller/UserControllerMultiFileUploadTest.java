@@ -1,12 +1,22 @@
 package com.sudheer.portfoliotracker.controller;
 
 import com.sudheer.portfoliotracker.api.controller.UserController;
+import com.sudheer.portfoliotracker.infrastructure.persistence.entity.AmfiImport;
 import com.sudheer.portfoliotracker.infrastructure.persistence.entity.PortfolioUser;
+import com.sudheer.portfoliotracker.infrastructure.persistence.entity.UploadHistory;
+import com.sudheer.portfoliotracker.infrastructure.persistence.entity.UploadTimelineEvent;
+import com.sudheer.portfoliotracker.infrastructure.persistence.entity.UserHolding;
 import com.sudheer.portfoliotracker.repository.AmfiImportRepository;
 import com.sudheer.portfoliotracker.repository.PortfolioUserRepository;
+import com.sudheer.portfoliotracker.repository.UploadHistoryRepository;
+import com.sudheer.portfoliotracker.repository.UploadTimelineEventRepository;
+import com.sudheer.portfoliotracker.repository.UserHoldingRepository;
+import com.sudheer.portfoliotracker.repository.UserTransactionRepository;
+import com.sudheer.portfoliotracker.service.CamsPdfStatementParser;
 import com.sudheer.portfoliotracker.service.TransactionIngestService;
 import com.sudheer.portfoliotracker.service.ZipHandlerService;
 import com.sudheer.portfoliotracker.service.FileMetadataExtractor;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -14,7 +24,9 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.io.InputStream;
 import java.io.ByteArrayOutputStream;
+import java.util.List;
 import java.util.Optional;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -22,6 +34,8 @@ import java.util.zip.ZipOutputStream;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.anyLong;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -45,11 +59,49 @@ class UserControllerMultiFileUploadTest {
     @MockBean
     private FileMetadataExtractor metadataExtractor;
 
-    private void setupMockImport() {
-        com.sudheer.portfoliotracker.infrastructure.persistence.entity.AmfiImport mockImport =
-            new com.sudheer.portfoliotracker.infrastructure.persistence.entity.AmfiImport();
+    @MockBean
+    private CamsPdfStatementParser camsPdfStatementParser;
+
+    @MockBean
+    private UploadHistoryRepository uploadHistoryRepository;
+
+    @MockBean
+    private UploadTimelineEventRepository uploadTimelineEventRepository;
+
+    @MockBean
+    private UserHoldingRepository userHoldingRepository;
+
+    @MockBean
+    private UserTransactionRepository userTransactionRepository;
+
+    private final AmfiImport mockImport = new AmfiImport();
+    private final UploadHistory mockUploadHistory = new UploadHistory();
+
+    @BeforeEach
+    void setUp() {
         mockImport.setId(1L);
-        when(importRepository.save(any())).thenReturn(mockImport);
+        mockImport.setRowsProcessed(2);
+        mockImport.setRowsInserted(2);
+        mockImport.setRowsSkipped(0);
+
+        mockUploadHistory.setId(1L);
+
+        when(metadataExtractor.extractEmailFromCsv(any(byte[].class))).thenReturn(null);
+        when(importRepository.save(any(AmfiImport.class))).thenReturn(mockImport);
+        when(importRepository.findById(anyLong())).thenReturn(Optional.of(mockImport));
+        when(uploadHistoryRepository.findById(1L)).thenReturn(Optional.of(mockUploadHistory));
+        when(uploadTimelineEventRepository.save(any(UploadTimelineEvent.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(userHoldingRepository.findByUserId(anyLong())).thenReturn(List.of());
+        when(userTransactionRepository.countByUserId(anyLong())).thenReturn(0L);
+
+        doAnswer(invocation -> {
+            UploadHistory uploadHistory = invocation.getArgument(0);
+            if (uploadHistory.getId() == null) {
+                uploadHistory.setId(1L);
+            }
+            return uploadHistory;
+        }).when(uploadHistoryRepository).save(any(UploadHistory.class));
     }
 
     @Test
@@ -63,12 +115,6 @@ class UserControllerMultiFileUploadTest {
         when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
         when(ingestService.ingestCsvForUser(anyString(), anyString(), any(byte[].class), anyLong(), anyBoolean()))
                 .thenReturn(1L);
-
-        // Mock AmfiImport repository to return a saved import
-        com.sudheer.portfoliotracker.infrastructure.persistence.entity.AmfiImport mockImport =
-            new com.sudheer.portfoliotracker.infrastructure.persistence.entity.AmfiImport();
-        mockImport.setId(1L);
-        when(importRepository.save(any())).thenReturn(mockImport);
 
         // Create test files
         MockMultipartFile transactionFile = new MockMultipartFile(
@@ -92,9 +138,11 @@ class UserControllerMultiFileUploadTest {
                 .param("email", email)
                 .param("rtaName", "CAMS"))
                 .andExpect(status().isAccepted())
-                .andExpect(jsonPath("$.status").value("PROCESSING"))
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
                 .andExpect(jsonPath("$.uploadMode").value("INDIVIDUAL"))
-                .andExpect(jsonPath("$.filesProcessed").value(2));
+                .andExpect(jsonPath("$.filesProcessed").value(2))
+                .andExpect(jsonPath("$.uploadId").value(1))
+                .andExpect(jsonPath("$.rowsProcessed").value(2));
     }
 
     @Test
@@ -107,7 +155,6 @@ class UserControllerMultiFileUploadTest {
         when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
         when(ingestService.ingestCsvForUser(anyString(), anyString(), any(byte[].class), anyLong(), anyBoolean()))
                 .thenReturn(1L);
-        setupMockImport();
 
         MockMultipartFile transactionFile = new MockMultipartFile(
                 "transactionFile",
@@ -122,7 +169,8 @@ class UserControllerMultiFileUploadTest {
                 .param("rtaName", "CAMS"))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.uploadMode").value("INDIVIDUAL"))
-                .andExpect(jsonPath("$.filesProcessed").value(1));
+                .andExpect(jsonPath("$.filesProcessed").value(1))
+                .andExpect(jsonPath("$.status").value("COMPLETED"));
     }
 
     @Test
@@ -135,7 +183,6 @@ class UserControllerMultiFileUploadTest {
         when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
         when(ingestService.ingestCsvForUser(anyString(), anyString(), any(byte[].class), anyLong(), anyBoolean()))
                 .thenReturn(1L);
-        setupMockImport();
 
         MockMultipartFile valuationFile = new MockMultipartFile(
                 "valuationFile",
@@ -150,7 +197,8 @@ class UserControllerMultiFileUploadTest {
                 .param("rtaName", "CAMS"))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.uploadMode").value("INDIVIDUAL"))
-                .andExpect(jsonPath("$.filesProcessed").value(1));
+                .andExpect(jsonPath("$.filesProcessed").value(1))
+                .andExpect(jsonPath("$.status").value("COMPLETED"));
     }
 
     @Test
@@ -163,7 +211,6 @@ class UserControllerMultiFileUploadTest {
         when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
         when(ingestService.ingestCsvForUser(anyString(), anyString(), any(byte[].class), anyLong(), anyBoolean()))
                 .thenReturn(1L);
-        setupMockImport();
 
         // Create ZIP file with new naming convention
         ByteArrayOutputStream zipOutput = new ByteArrayOutputStream();
@@ -184,7 +231,7 @@ class UserControllerMultiFileUploadTest {
                 "data".getBytes(), "data".getBytes(), "ABC123.txt", "CurrentValuationABC123.txt"
         );
 
-        when(ingestService.extractFilesFromZip(any())).thenReturn(extracted);
+        when(ingestService.extractFilesFromZip(any(InputStream.class))).thenReturn(extracted);
 
         MockMultipartFile zipFile = new MockMultipartFile(
                 "zipFile",
@@ -199,7 +246,8 @@ class UserControllerMultiFileUploadTest {
                 .param("rtaName", "CAMS"))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.uploadMode").value("ZIP"))
-                .andExpect(jsonPath("$.filesProcessed").value(is(2)));
+                .andExpect(jsonPath("$.filesProcessed").value(is(2)))
+                .andExpect(jsonPath("$.status").value("COMPLETED"));
     }
 
     @Test
@@ -226,16 +274,20 @@ class UserControllerMultiFileUploadTest {
         String email = "newuser@example.com";
 
         when(userRepository.findByEmail(email)).thenReturn(Optional.empty());
-        when(userRepository.save(any())).thenReturn(new PortfolioUser());
+        PortfolioUser savedUser = new PortfolioUser();
+        savedUser.setId(10L);
+        savedUser.setEmail(email);
+        savedUser.setName("John Doe");
+        savedUser.setPan("ABCDE1234F1Z9");
+        when(userRepository.save(any())).thenReturn(savedUser);
         when(ingestService.ingestCsvForUser(anyString(), anyString(), any(byte[].class), anyLong(), anyBoolean()))
                 .thenReturn(1L);
-        setupMockImport();
 
         MockMultipartFile transactionFile = new MockMultipartFile(
                 "transactionFile",
                 "ABC123.txt",
                 "text/plain",
-                "PAN:ABC123\nINVESTOR_NAME:John Doe\n".getBytes()
+                "PAN: ABCDE1234F1Z9\nInvestor Name: John Doe\n".getBytes()
         );
 
         mvc.perform(multipart("/api/users/upload-files")
@@ -244,7 +296,8 @@ class UserControllerMultiFileUploadTest {
                 .param("rtaName", "CAMS"))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.uploadMode").value("INDIVIDUAL"))
-                .andExpect(jsonPath("$.filesProcessed").value(1));
+                .andExpect(jsonPath("$.filesProcessed").value(1))
+                .andExpect(jsonPath("$.status").value("COMPLETED"));
     }
 
     @Test
@@ -344,4 +397,3 @@ class UserControllerMultiFileUploadTest {
                 .andExpect(jsonPath("$.importId").value(is((int) existingImportId)));
     }
 }
-
